@@ -14,6 +14,11 @@ import pandas as pd
 from datetime import datetime
 
 
+def normalize_event(event: str) -> str:
+    """Strip group suffixes like '- Group A' from event names."""
+    return re.sub(r'\s*-\s*Group\s+[A-Za-z]+\s*$', '', event).strip()
+
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -106,7 +111,7 @@ def scrape_matches(tournament_id: str) -> pd.DataFrame:
         for match_div in soup.select(".match"):
             # Event name and round
             title_items = match_div.select(".match__header-title-item .nav-link__value")
-            event = title_items[0].get_text(strip=True) if len(title_items) > 0 else ""
+            event = normalize_event(title_items[0].get_text(strip=True)) if len(title_items) > 0 else ""
             round_name = title_items[1].get_text(strip=True) if len(title_items) > 1 else ""
 
             # Players (one .match__row per player/side)
