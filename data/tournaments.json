@@ -1,0 +1,97 @@
+{
+  "F00EA843-6536-473D-8B84-3F1B74B88152": {
+    "name": "25.26 YONEX AJC Gold - Modu Junior u11, 13, 15, 17, 19",
+    "date": "Sat 29 Nov 2025 1:00 PM (GMT -07:00)",
+    "id": "F00EA843-6536-473D-8B84-3F1B74B88152"
+  },
+  "807ce64d-893e-4740-9994-53cb06a2eefe": {
+    "name": "25.26 YONEX AJC Silver - Blackfalds Junior",
+    "date": "Mon 25 Aug 2025 3:15 PM (GMT -06:00)",
+    "id": "807ce64d-893e-4740-9994-53cb06a2eefe",
+    "tier": "SILVER"
+  },
+  "3786adf2-d77b-44b6-b6a4-578ec1c60a35": {
+    "name": "25.26 YONEX AJC Gold - ClearOne Calgary Junior",
+    "date": "Tue 26 Aug 2025 4:00 PM (GMT -06:00)",
+    "id": "3786adf2-d77b-44b6-b6a4-578ec1c60a35",
+    "tier": "GOLD"
+  },
+  "2802ec6b-831f-4ca7-85a9-bf34b2ced959": {
+    "name": "25.26 YONEX AJC Silver - Modu Junior",
+    "date": "Wed 27 Aug 2025 7:00 AM (GMT -06:00)",
+    "id": "2802ec6b-831f-4ca7-85a9-bf34b2ced959",
+    "tier": "SILVER"
+  },
+  "216dd75d-d5d5-481e-8668-540e3d1209c9": {
+    "name": "25.26 YONEX AJC Gold - SBC Junior",
+    "date": "Wed 17 Sep 2025 2:00 PM (GMT -06:00)",
+    "id": "216dd75d-d5d5-481e-8668-540e3d1209c9",
+    "tier": "GOLD"
+  },
+  "20f4dc50-a87e-4e2b-80af-e9311f5dadc0": {
+    "name": "25.26 YONEX AJC Gold - Synergy Junior",
+    "date": "Sat 4 Oct 2025 1:00 PM (GMT -06:00)",
+    "id": "20f4dc50-a87e-4e2b-80af-e9311f5dadc0",
+    "tier": "GOLD"
+  },
+  "338d3e12-26ae-4de5-afaa-fb429c3018d9": {
+    "name": "25.26 YONEX AJC Silver - Edison Junior u11, 13, 15",
+    "date": "Wed 8 Oct 2025 2:00 PM (GMT -06:00)",
+    "id": "338d3e12-26ae-4de5-afaa-fb429c3018d9",
+    "tier": "SILVER"
+  },
+  "a3160b3c-7ee3-44af-a955-4ada88bb35fb": {
+    "name": "2025 YONEX Alberta Junior Elite",
+    "date": "Fri 17 Oct 2025 12:00 PM (GMT -07:00)",
+    "id": "a3160b3c-7ee3-44af-a955-4ada88bb35fb",
+    "tier": "NATIONAL"
+  },
+  "a742ac96-de8a-450a-896b-2a13a599dc25": {
+    "name": "25.26 YONEX AJC Silver - B-Active Junior u13, 15, 17, 19",
+    "date": "Wed 29 Oct 2025 7:00 PM (GMT -06:00)",
+    "id": "a742ac96-de8a-450a-896b-2a13a599dc25",
+    "tier": "SILVER"
+  },
+  "fa8ae4dd-e675-411e-99e2-c999aad4bd2b": {
+    "name": "25.26 YONEX AJC Bronze - The Glencoe Club Junior u11,13, 15, 17",
+    "date": "Fri 21 Nov 2025 3:00 PM (GMT -07:00)",
+    "id": "fa8ae4dd-e675-411e-99e2-c999aad4bd2b",
+    "tier": "BRONZE"
+  },
+  "b9c2c368-f7fd-4e06-b2f9-b5b324c3f95b": {
+    "name": "25.26 YONEX AJC Gold - Olds College Junior u11, 13, 15, 17, 19",
+    "date": "Sun 16 Nov 2025 11:00 AM (GMT -07:00)",
+    "id": "b9c2c368-f7fd-4e06-b2f9-b5b324c3f95b",
+    "tier": "GOLD"
+  },
+  "eee7aa95-282f-40fa-87aa-ca5756db3e86": {
+    "name": "25.26 YONEX AJC Silver - Badminton Academy Junior u11, 13, 15, 17",
+    "date": "Fri 5 Dec 2025 3:00 PM (GMT -07:00)",
+    "id": "eee7aa95-282f-40fa-87aa-ca5756db3e86",
+    "tier": "SILVER"
+  },
+  "E417A2DF-ED7C-4F30-B0FB-3B22A7CC836E": {
+    "name": "25.26 YONEX AJC Gold - Derrick Junior u11, 13, 15, 17, 19",
+    "date": "Wed 3 Dec 2025 8:00 AM (GMT -07:00)",
+    "id": "E417A2DF-ED7C-4F30-B0FB-3B22A7CC836E",
+    "tier": "GOLD"
+  },
+  "a7e7242e-7048-4a4f-8cca-56f64f433a83": {
+    "name": "25.26 YONEX AJC Silver - ClearOne Calgary Junior u11, 13, 15, 17, 19",
+    "date": "Wed 17 Dec 2025 12:00 AM (GMT -07:00)",
+    "id": "a7e7242e-7048-4a4f-8cca-56f64f433a83",
+    "tier": "SILVER"
+  },
+  "2E257919-BB98-4C28-B498-FA740D612360": {
+    "name": "25.26 YONEX AJC Gold - Blackfalds Junior u11, 13, 15, 17, 19",
+    "date": "Wed 17 Dec 2025 8:00 AM (GMT -07:00)",
+    "id": "2E257919-BB98-4C28-B498-FA740D612360",
+    "tier": "GOLD"
+  },
+  "0C767982-6953-44DD-819A-AA969512533E": {
+    "name": "25.26 YONEX AJC Gold - B-Active (Shirley Mah Memorial) Junior u11, 13, 15, 17, 19",
+    "date": "Wed 7 Jan 8:00 AM (GMT -07:00)",
+    "id": "0C767982-6953-44DD-819A-AA969512533E",
+    "tier": "GOLD"
+  }
+}

@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Data files — commit these to share the dataset with others
+# (comment out the lines below if you want to exclude data from the repo)
+# data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit cache
+.streamlit/secrets.toml
