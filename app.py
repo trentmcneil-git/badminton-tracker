@@ -410,10 +410,30 @@ with tab_overview:
 
     st.divider()
 
-    # ── Section 2: Top Clubs by Overall Win Rate ───────────────────────────────
-    st.subheader("Top Clubs by Overall Win Rate")
-    st.caption("Minimum 30 matches to qualify")
-    top_wr = ov_clubs[ov_clubs["Matches"] >= 30].head(15)
+    # Alberta clubs — used to filter sections 2 and 3
+    ALBERTA_CLUBS = {
+        "Modu Club",
+        "Drive Sports Badminton Club",
+        "Gao Badminton Tao",
+        "B-Active Badminton Club",
+        "Calgary Winter Club",
+        "The Glencoe Club",
+        "Edison Badminton Centre",
+        "Derrick Golf & Winter Club",
+        "Red Deer Youth Badminton Club",
+        "ClearOne Calgary",
+        "Royal Glenora Club",
+        "Kshatriya Badminton Academy",
+        "Fort McMurray Junior Badminton Club",
+        "Red Willow Badminton Club",
+    }
+
+    # ── Section 2: Top Alberta Clubs by Overall Win Rate ──────────────────────
+    st.subheader("Top Alberta Clubs by Overall Win Rate")
+    st.caption("Alberta clubs only — minimum 30 matches to qualify")
+    top_wr = ov_clubs[
+        ov_clubs["Club"].isin(ALBERTA_CLUBS) & (ov_clubs["Matches"] >= 30)
+    ].sort_values("Win Rate %", ascending=False)
     col_tbl, col_chart = st.columns([1, 2])
     with col_tbl:
         st.dataframe(
@@ -437,9 +457,9 @@ with tab_overview:
 
     st.divider()
 
-    # ── Section 3: Club Win Rate by Discipline (GS/GD/BS/BD/XD) ──────────────
-    st.subheader("Club Win Rate by Event")
-    st.caption("Which clubs develop the strongest players in each discipline — minimum 20 matches to qualify")
+    # ── Section 3: Alberta Club Win Rate by Discipline (GS/GD/BS/BD/XD) ───────
+    st.subheader("Alberta Club Win Rate by Event")
+    st.caption("Which Alberta clubs develop the strongest players in each discipline — minimum 20 matches to qualify")
 
     _EVENT_PREFIXES = {
         "GS": "GS — Girls Singles",
@@ -448,11 +468,12 @@ with tab_overview:
         "BD": "BD — Boys Doubles",
         "XD": "XD — Mixed Doubles",
     }
-    _COLOURS = {"GS": "#3498db", "GD": "#9b59b6", "BS": "#2ecc71", "BD": "#1abc9c", "XD": "#e67e22"}
 
     ev_rows = []
-    for _club in all_players["club"].dropna().unique():
+    for _club in ALBERTA_CLUBS:
         _cp = set(all_players[all_players["club"] == _club]["player_name"].unique())
+        if not _cp:
+            continue
         for _prefix, _label in _EVENT_PREFIXES.items():
             _evm = all_matches[
                 all_matches["event"].str.upper().str.startswith(_prefix, na=False) &
@@ -473,7 +494,7 @@ with tab_overview:
     if ev_rows:
         ev_df = pd.DataFrame(ev_rows)
         for _prefix, _label in _EVENT_PREFIXES.items():
-            sub = ev_df[ev_df["Event"] == _prefix].sort_values("Win Rate %", ascending=False).head(12)
+            sub = ev_df[ev_df["Event"] == _prefix].sort_values("Win Rate %", ascending=False)
             if sub.empty:
                 continue
             with st.expander(f"**{_label}**", expanded=True):
