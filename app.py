@@ -106,6 +106,28 @@ def infer_birth_year_range(player_name: str, matches: pd.DataFrame) -> tuple | N
     return best[1] if best else None
 
 
+def build_gender_index(matches: pd.DataFrame) -> dict:
+    """
+    Infer gender for every player from their event names.
+    BS/BD prefix → Male, GS/GD prefix → Female.
+    XD-only players are left out (unknown).
+    """
+    all_names = pd.concat([matches["player1"], matches["player2"]]).dropna().unique()
+    index = {}
+    for name in all_names:
+        involved = matches[
+            (matches["player1"] == name) | (matches["player2"] == name)
+        ]["event"].dropna()
+        male_events   = involved.str.upper().str.startswith(("BS", "BD")).sum()
+        female_events = involved.str.upper().str.startswith(("GS", "GD")).sum()
+        if male_events > 0 and female_events == 0:
+            index[name] = "Male"
+        elif female_events > 0 and male_events == 0:
+            index[name] = "Female"
+        # players in both (shouldn't happen) or XD-only are excluded
+    return index
+
+
 def build_birth_year_index(matches: pd.DataFrame, registry: pd.DataFrame) -> dict:
     """
     Build a dict of player_name -> birth_year (exact from registry, or
@@ -334,6 +356,8 @@ if not registry.empty:
     registry["_norm"] = registry["player_name"].apply(normalize_name_for_lookup)
 # Birth year index covers all match players (exact from registry + inferred from age category)
 birth_year_index = build_birth_year_index(all_matches, registry)
+# Gender index inferred from event prefixes (BS/BD=Male, GS/GD=Female)
+gender_index = build_gender_index(all_matches)
 
 if all_matches.empty:
     st.info("No data yet — add a tournament URL in the sidebar to get started.")
@@ -385,14 +409,16 @@ with tab_player:
             st.warning("No match data found for this player.")
         else:
             birth_year = get_birth_year(selected_player, registry)
+            gender = gender_index.get(selected_player, "—")
 
             # ── Player summary cards ───────────────────────────────────────────
-            col1, col2, col3, col4, col5 = st.columns(5)
+            col1, col2, col3, col4, col5, col6 = st.columns(6)
             col1.metric("Club", stats["club"])
-            col2.metric("Birth Year", birth_year if birth_year else "—")
-            col3.metric("Total Matches", stats["total_matches"])
-            col4.metric("Wins / Losses", f"{stats['wins']} / {stats['losses']}")
-            col5.metric("Win Rate", f"{stats['win_rate']}%")
+            col2.metric("Gender", gender)
+            col3.metric("Birth Year", birth_year if birth_year else "—")
+            col4.metric("Total Matches", stats["total_matches"])
+            col5.metric("Wins / Losses", f"{stats['wins']} / {stats['losses']}")
+            col6.metric("Win Rate", f"{stats['win_rate']}%")
 
             # ── Performance by event ───────────────────────────────────────────
             st.subheader("Results by Event")
@@ -626,7 +652,13 @@ with tab_cohort:
                                      placeholder="Choose a year...")
 
         if selected_year:
+            gender_filter = st.radio("Gender", ["All", "Male", "Female"],
+                                     horizontal=True, key="cohort_gender")
+
             cohort_players = [p for p, y in birth_year_index.items() if y == selected_year]
+            if gender_filter != "All":
+                cohort_players = [p for p in cohort_players
+                                  if gender_index.get(p) == gender_filter]
 
             # Flag which players have exact vs inferred birth year
             reg_norms = set(registry["_norm"]) if not registry.empty and "_norm" in registry.columns else set()
@@ -639,6 +671,7 @@ with tab_cohort:
                     cohort_rows.append({
                         "Player": p,
                         "Club": stats["club"],
+                        "Gender": gender_index.get(p, "—"),
                         "Matches": stats["total_matches"],
                         "Wins": stats["wins"],
                         "Losses": stats["losses"],
