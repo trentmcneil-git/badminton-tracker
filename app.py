@@ -282,8 +282,9 @@ if all_matches.empty:
     st.stop()
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab_overview, tab_player, tab_club, tab_matches = st.tabs([
-    "Overview", "Player Analytics", "Club Leaderboard", "Match Results"
+tab_overview, tab_player, tab_club, tab_trend, tab_cohort, tab_h2h, tab_matches = st.tabs([
+    "Overview", "Player Analytics", "Club Leaderboard",
+    "Season Trend", "Birth Year Cohort", "Head-to-Head", "Match Results"
 ])
 
 
@@ -457,6 +458,223 @@ with tab_club:
                     height=max(200, len(sub) * 30),
                 )
                 st.plotly_chart(fig_d, use_container_width=True)
+
+
+# ── Season Trend tab ──────────────────────────────────────────────────────────
+with tab_trend:
+    st.subheader("Win Rate Trend Over the Season")
+    st.caption("How a player's win rate has changed tournament by tournament.")
+
+    trend_player = st.selectbox(
+        "Select a player", sorted(all_players["player_name"].unique()),
+        index=None, placeholder="Start typing a name...", key="trend_player"
+    )
+
+    if trend_player:
+        tournaments = load_tournaments()
+        # Build a date lookup: tournament_id -> (name, date)
+        tid_info = {
+            tid: info for tid, info in tournaments.items()
+        }
+
+        involved = all_matches[
+            (all_matches["player1"] == trend_player) |
+            (all_matches["player2"] == trend_player)
+        ].copy()
+        involved["won"] = involved["winner"] == trend_player
+
+        trend_rows = []
+        for tid, grp in involved.groupby("tournament_id"):
+            info = tid_info.get(tid, {})
+            t_name = info.get("name", tid)
+            t_date = info.get("date", "")
+            wins = grp["won"].sum()
+            total = len(grp)
+            trend_rows.append({
+                "Tournament": t_name,
+                "Date": t_date,
+                "Matches": total,
+                "Wins": int(wins),
+                "Losses": total - int(wins),
+                "Win Rate %": round(wins / total * 100, 1),
+                "tournament_id": tid,
+            })
+
+        if trend_rows:
+            trend_df = pd.DataFrame(trend_rows).sort_values("Date")
+
+            # Line chart
+            fig_trend = go.Figure()
+            fig_trend.add_scatter(
+                x=trend_df["Tournament"], y=trend_df["Win Rate %"],
+                mode="lines+markers",
+                marker=dict(size=10, color="#3498db"),
+                line=dict(color="#3498db", width=2),
+                name="Win Rate %",
+                hovertemplate="<b>%{x}</b><br>Win Rate: %{y}%<extra></extra>",
+            )
+            # Season average reference line
+            season_avg = round(trend_df["Wins"].sum() / trend_df["Matches"].sum() * 100, 1)
+            fig_trend.add_hline(
+                y=season_avg, line_dash="dash", line_color="gray",
+                annotation_text=f"Season avg {season_avg}%",
+                annotation_position="bottom right",
+            )
+            fig_trend.update_layout(
+                yaxis=dict(title="Win Rate %", range=[0, 105]),
+                xaxis=dict(title="Tournament", tickangle=-30),
+                height=400,
+            )
+            st.plotly_chart(fig_trend, use_container_width=True)
+
+            # Summary table
+            st.dataframe(
+                trend_df[["Tournament", "Matches", "Wins", "Losses", "Win Rate %"]],
+                use_container_width=True, hide_index=True
+            )
+
+            # First-half vs second-half split
+            mid = len(trend_df) // 2
+            if mid > 0:
+                first_half = trend_df.iloc[:mid]
+                second_half = trend_df.iloc[mid:]
+                fh_rate = round(first_half["Wins"].sum() / first_half["Matches"].sum() * 100, 1)
+                sh_rate = round(second_half["Wins"].sum() / second_half["Matches"].sum() * 100, 1)
+                delta = round(sh_rate - fh_rate, 1)
+                st.subheader("Season Split")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("First Half Win Rate", f"{fh_rate}%")
+                c2.metric("Second Half Win Rate", f"{sh_rate}%")
+                c3.metric("Change", f"{'+' if delta >= 0 else ''}{delta}%",
+                          delta=delta, delta_color="normal")
+        else:
+            st.info("No match data found for this player.")
+
+
+# ── Birth Year Cohort tab ──────────────────────────────────────────────────────
+with tab_cohort:
+    st.subheader("Birth Year Cohort Leaderboard")
+    st.caption("Compare players born in the same year, across all events.")
+
+    if registry.empty:
+        st.warning("Player registry not loaded — click 'Refresh Player Registry' in the sidebar.")
+    else:
+        birth_years = sorted(registry["birth_year"].dropna().unique(), reverse=True)
+        selected_year = st.selectbox("Select birth year", birth_years, index=None,
+                                     placeholder="Choose a year...")
+
+        if selected_year:
+            cohort_players = registry[registry["birth_year"] == selected_year]["player_name"].tolist()
+
+            cohort_rows = []
+            for p in cohort_players:
+                stats = get_player_stats(p, all_matches, all_players)
+                if stats and stats["total_matches"] > 0:
+                    cohort_rows.append({
+                        "Player": p,
+                        "Club": stats["club"],
+                        "Matches": stats["total_matches"],
+                        "Wins": stats["wins"],
+                        "Losses": stats["losses"],
+                        "Win Rate %": stats["win_rate"],
+                        "Events": ", ".join(stats["events"]),
+                    })
+
+            if cohort_rows:
+                cohort_df = pd.DataFrame(cohort_rows).sort_values("Win Rate %", ascending=False)
+                st.caption(f"{len(cohort_df)} ranked players born in {selected_year}")
+
+                st.dataframe(cohort_df, use_container_width=True, hide_index=True)
+
+                fig_cohort = px.bar(
+                    cohort_df.sort_values("Win Rate %", ascending=True),
+                    x="Win Rate %", y="Player", orientation="h",
+                    color="Win Rate %", color_continuous_scale="RdYlGn",
+                    range_color=[0, 100],
+                    hover_data=["Club", "Matches", "Wins", "Losses"],
+                )
+                fig_cohort.update_layout(
+                    coloraxis_showscale=False,
+                    height=max(300, len(cohort_df) * 35),
+                )
+                st.plotly_chart(fig_cohort, use_container_width=True)
+            else:
+                st.info(f"No match data found for ranked players born in {selected_year}.")
+
+
+# ── Head-to-Head tab ──────────────────────────────────────────────────────────
+with tab_h2h:
+    st.subheader("Head-to-Head")
+    st.caption("All matches between two players across every tournament.")
+
+    all_player_names = sorted(all_players["player_name"].unique())
+    col1, col2 = st.columns(2)
+    with col1:
+        h2h_p1 = st.selectbox("Player 1", all_player_names, index=None,
+                               placeholder="Select player 1...", key="h2h_p1")
+    with col2:
+        h2h_p2 = st.selectbox("Player 2", all_player_names, index=None,
+                               placeholder="Select player 2...", key="h2h_p2")
+
+    if h2h_p1 and h2h_p2 and h2h_p1 != h2h_p2:
+        h2h_matches = all_matches[
+            ((all_matches["player1"] == h2h_p1) & (all_matches["player2"] == h2h_p2)) |
+            ((all_matches["player1"] == h2h_p2) & (all_matches["player2"] == h2h_p1))
+        ].copy()
+
+        if h2h_matches.empty:
+            st.info("These two players have never met in the data.")
+        else:
+            p1_wins = (h2h_matches["winner"] == h2h_p1).sum()
+            p2_wins = (h2h_matches["winner"] == h2h_p2).sum()
+            total = len(h2h_matches)
+
+            # Score cards
+            c1, c2, c3 = st.columns(3)
+            c1.metric(h2h_p1, f"{p1_wins} wins")
+            c2.metric("Total Matches", total)
+            c3.metric(h2h_p2, f"{p2_wins} wins")
+
+            # Visual win bar
+            if total > 0:
+                p1_pct = p1_wins / total
+                p2_pct = p2_wins / total
+                fig_h2h = go.Figure()
+                fig_h2h.add_bar(
+                    x=[p1_wins], y=["Record"], orientation="h",
+                    name=h2h_p1, marker_color="#3498db",
+                    text=[f"{h2h_p1}: {p1_wins}"], textposition="inside",
+                )
+                fig_h2h.add_bar(
+                    x=[p2_wins], y=["Record"], orientation="h",
+                    name=h2h_p2, marker_color="#e74c3c",
+                    text=[f"{h2h_p2}: {p2_wins}"], textposition="inside",
+                )
+                fig_h2h.update_layout(
+                    barmode="stack", height=120,
+                    showlegend=False,
+                    xaxis=dict(visible=False),
+                    margin=dict(l=0, r=0, t=10, b=0),
+                )
+                st.plotly_chart(fig_h2h, use_container_width=True)
+
+            # Individual match log
+            tournaments = load_tournaments()
+            h2h_matches["Tournament"] = h2h_matches["tournament_id"].map(
+                lambda tid: tournaments.get(tid, {}).get("name", tid)
+            )
+            h2h_matches["Winner"] = h2h_matches["winner"]
+            st.dataframe(
+                h2h_matches[["Date", "Tournament", "Event", "Round", "Winner", "Score"]].rename(
+                    columns={"date": "Date", "event": "Event", "round": "Round", "score": "Score"}
+                ) if "Date" in h2h_matches.columns else
+                h2h_matches[["date", "Tournament", "event", "round", "Winner", "score"]].rename(
+                    columns={"date": "Date", "event": "Event", "round": "Round", "score": "Score"}
+                ),
+                use_container_width=True, hide_index=True
+            )
+    elif h2h_p1 and h2h_p2 and h2h_p1 == h2h_p2:
+        st.warning("Please select two different players.")
 
 
 # ── Match Results tab ─────────────────────────────────────────────────────────
