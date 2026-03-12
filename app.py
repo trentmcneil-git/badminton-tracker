@@ -583,25 +583,86 @@ with tab_player:
 
             # ── Match history ──────────────────────────────────────────────────
             st.subheader("Match History")
-            history = stats["match_history"][
-                ["date", "event", "round", "player1", "player2", "winner", "score"]
-            ].copy()
-            history["Result"] = history["winner"].apply(
-                lambda w: "Win" if w == selected_player else "Loss"
+
+            _tourn_info = load_tournaments()
+
+            def _is_doubles(event: str) -> bool:
+                e = str(event).upper()
+                return e.startswith("GD") or e.startswith("BD") or e.startswith("XD")
+
+            def _build_history_row(r, player_name, all_matches, tourn_info):
+                tid = r["tournament_id"]
+                info = tourn_info.get(tid, tourn_info.get(tid.upper(), {}))
+                tourn_name = info.get("name", tid) if isinstance(info, dict) else tid
+
+                result = "Win" if r["winner"] == player_name else "Loss"
+                event = r["event"]
+
+                if _is_doubles(event):
+                    # Sibling row = same match context, neither slot is our player
+                    siblings = all_matches[
+                        (all_matches["tournament_id"] == r["tournament_id"]) &
+                        (all_matches["date"] == r["date"]) &
+                        (all_matches["event"] == event) &
+                        (all_matches["round"] == r["round"]) &
+                        (all_matches["score"] == r["score"]) &
+                        (all_matches["player1"] != player_name) &
+                        (all_matches["player2"] != player_name)
+                    ]
+                    if r["player1"] == player_name:
+                        # player is on side1, opponent direct is player2
+                        direct_opp = r["player2"]
+                        if not siblings.empty:
+                            partner   = siblings.iloc[0]["player1"]
+                            other_opp = siblings.iloc[0]["player2"]
+                        else:
+                            partner, other_opp = "?", "?"
+                    else:
+                        # player is on side2, opponent direct is player1
+                        direct_opp = r["player1"]
+                        if not siblings.empty:
+                            other_opp = siblings.iloc[0]["player1"]
+                            partner   = siblings.iloc[0]["player2"]
+                        else:
+                            partner, other_opp = "?", "?"
+                    return {
+                        "Date": r["date"],
+                        "Tournament": tourn_name,
+                        "Event": event,
+                        "Round": r["round"],
+                        "Partner": partner,
+                        "Opponents": f"{direct_opp} / {other_opp}",
+                        "Result": result,
+                        "Score": r["score"],
+                    }
+                else:
+                    opponent = r["player2"] if r["player1"] == player_name else r["player1"]
+                    return {
+                        "Date": r["date"],
+                        "Tournament": tourn_name,
+                        "Event": event,
+                        "Round": r["round"],
+                        "Partner": "—",
+                        "Opponents": opponent,
+                        "Result": result,
+                        "Score": r["score"],
+                    }
+
+            raw_history = stats["match_history"].to_dict("records")
+            hist_rows = [
+                _build_history_row(r, selected_player, all_matches, _tourn_info)
+                for r in raw_history
+            ]
+            hist_df = pd.DataFrame(hist_rows)
+
+            # Show Partner column only if player has any doubles matches
+            has_doubles = hist_df["Partner"].ne("—").any()
+            cols_to_show = (
+                ["Date", "Tournament", "Event", "Round", "Partner", "Opponents", "Result", "Score"]
+                if has_doubles else
+                ["Date", "Tournament", "Event", "Round", "Opponents", "Result", "Score"]
             )
-            history["Opponent"] = history.apply(
-                lambda r: r["player2"] if r["player1"] == selected_player else r["player1"],
-                axis=1,
-            )
-            history = history.rename(columns={
-                "date": "Date", "event": "Event",
-                "round": "Round", "score": "Score"
-            })
-            st.dataframe(
-                history[["Date", "Event", "Round", "Opponent", "Result", "Score"]],
-                use_container_width=True,
-                hide_index=True,
-            )
+            st.dataframe(hist_df[cols_to_show], use_container_width=True, hide_index=True)
 
 
 # ── Club Leaderboard tab ──────────────────────────────────────────────────────
