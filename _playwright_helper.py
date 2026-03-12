@@ -4,9 +4,19 @@ Usage: python _playwright_helper.py <tournament_id>
 Outputs JSON array of player dicts to stdout.
 """
 import sys
+import re
 import json
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
+
+
+def normalize_player_name(name: str) -> str:
+    name = str(name).strip()
+    name = re.sub(r'\s*\[.*?\]\s*$', '', name).strip()
+    if ',' in name:
+        parts = name.split(',', 1)
+        name = parts[1].strip() + ' ' + parts[0].strip()
+    return name.title().strip()
 
 def main():
     tournament_id = sys.argv[1]
@@ -30,7 +40,7 @@ def main():
         club_el = item.select_one(".media__subheading .nav-link__value, .media__subheading")
         link_el = item.select_one("a.nav-link[href*='/player/']")
 
-        name = name_el.get_text(strip=True) if name_el else ""
+        name = normalize_player_name(name_el.get_text(strip=True)) if name_el else ""
         club = club_el.get_text(strip=True) if club_el else ""
         player_url = link_el["href"] if link_el else ""
 

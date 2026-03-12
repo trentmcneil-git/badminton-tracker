@@ -14,6 +14,22 @@ import pandas as pd
 from datetime import datetime
 
 
+def normalize_player_name(name: str) -> str:
+    """
+    Standardize player names to 'First Last' title case.
+    Handles formats: 'LAST, First', 'First LAST', 'First LAST [3/4]'
+    """
+    name = str(name).strip()
+    # Strip seeding/placement brackets like [1], [3/4], [WC]
+    name = re.sub(r'\s*\[.*?\]\s*$', '', name).strip()
+    # Convert 'LAST, First' -> 'First Last'
+    if ',' in name:
+        parts = name.split(',', 1)
+        name = parts[1].strip() + ' ' + parts[0].strip()
+    # Title-case everything
+    return name.title().strip()
+
+
 def normalize_event(event: str) -> str:
     """Strip group suffixes like '- Group A' from event names."""
     return re.sub(r'\s*-\s*Group\s+[A-Za-z]+\s*$', '', event).strip()
@@ -120,7 +136,7 @@ def scrape_matches(tournament_id: str) -> pd.DataFrame:
             winners = []
             for pr in player_rows:
                 name_el = pr.select_one(".match__row-title-value-content .nav-link__value")
-                player_name = name_el.get_text(strip=True) if name_el else ""
+                player_name = normalize_player_name(name_el.get_text(strip=True)) if name_el else ""
                 is_winner = bool(pr.select_one(".tag--round"))
                 players.append(player_name)
                 winners.append(is_winner)

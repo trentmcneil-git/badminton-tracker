@@ -61,12 +61,8 @@ def load_registry() -> pd.DataFrame:
 
 
 def normalize_name_for_lookup(name: str) -> str:
-    """Convert 'LAST, First' (tournament format) or 'First Last' to 'first last'."""
-    name = str(name).strip()
-    if ',' in name:
-        parts = name.split(',', 1)
-        return (parts[1].strip() + ' ' + parts[0].strip()).lower()
-    return name.lower()
+    """Lowercase a title-cased 'First Last' name for registry lookup."""
+    return str(name).strip().lower()
 
 
 def get_birth_year(player_name: str, registry: pd.DataFrame) -> int | None:
