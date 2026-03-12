@@ -547,7 +547,7 @@ with tab_club:
 # ── Season Trend tab ──────────────────────────────────────────────────────────
 with tab_trend:
     st.subheader("Win Rate Trend Over the Season")
-    st.caption("How a player's win rate has changed tournament by tournament.")
+    st.caption("Win rate per tournament, broken down by event type.")
 
     trend_player = st.selectbox(
         "Select a player", sorted(all_players["player_name"].unique()),
@@ -555,11 +555,7 @@ with tab_trend:
     )
 
     if trend_player:
-        tournaments = load_tournaments()
-        # Build a date lookup: tournament_id -> (name, date)
-        tid_info = {
-            tid: info for tid, info in tournaments.items()
-        }
+        tid_info = load_tournaments()
 
         involved = all_matches[
             (all_matches["player1"] == trend_player) |
@@ -567,72 +563,121 @@ with tab_trend:
         ].copy()
         involved["won"] = involved["winner"] == trend_player
 
-        trend_rows = []
-        for tid, grp in involved.groupby("tournament_id"):
-            info = tid_info.get(tid, {})
-            t_name = info.get("name", tid)
-            t_date = info.get("date", "")
-            wins = grp["won"].sum()
-            total = len(grp)
-            trend_rows.append({
-                "Tournament": t_name,
-                "Date": t_date,
-                "Matches": total,
-                "Wins": int(wins),
-                "Losses": total - int(wins),
-                "Win Rate %": round(wins / total * 100, 1),
-                "tournament_id": tid,
-            })
+        # Classify each match into an event category based on event prefix
+        def event_category(event):
+            e = str(event).upper().strip()
+            if e.startswith("BS") or e.startswith("GS"):
+                return "Singles"
+            if e.startswith("BD") or e.startswith("GD"):
+                return "Doubles"
+            if e.startswith("XD"):
+                return "XD"
+            return "Other"
 
-        if trend_rows:
-            trend_df = pd.DataFrame(trend_rows).sort_values("Date")
+        involved["category"] = involved["event"].apply(event_category)
 
-            # Line chart
+        # Which categories does this player actually have?
+        player_categories = [c for c in ["Singles", "Doubles", "XD"]
+                             if c in involved["category"].values]
+
+        if not player_categories:
+            st.info("No match data found for this player.")
+        else:
+            # Filter controls
+            show_overall = st.checkbox("Show Overall (all events combined)", value=True)
+            selected_cats = st.multiselect(
+                "Show individual event types",
+                options=player_categories,
+                default=player_categories,
+            )
+
+            # Colour palette per series
+            colours = {
+                "Overall": "#95a5a6",
+                "Singles": "#3498db",
+                "Doubles": "#2ecc71",
+                "XD": "#e67e22",
+            }
+
+            def build_trend(df_subset, label):
+                rows = []
+                for tid, grp in df_subset.groupby("tournament_id"):
+                    info = tid_info.get(tid, tid_info.get(tid.upper(), {}))
+                    t_name = info.get("name", tid) if isinstance(info, dict) else tid
+                    t_date = info.get("date", "") if isinstance(info, dict) else ""
+                    wins = grp["won"].sum()
+                    total = len(grp)
+                    rows.append({
+                        "Tournament": t_name,
+                        "Date": t_date,
+                        "Matches": total,
+                        "Wins": int(wins),
+                        "Losses": total - int(wins),
+                        "Win Rate %": round(wins / total * 100, 1),
+                        "Series": label,
+                    })
+                return pd.DataFrame(rows).sort_values("Date") if rows else pd.DataFrame()
+
             fig_trend = go.Figure()
-            fig_trend.add_scatter(
-                x=trend_df["Tournament"], y=trend_df["Win Rate %"],
-                mode="lines+markers",
-                marker=dict(size=10, color="#3498db"),
-                line=dict(color="#3498db", width=2),
-                name="Win Rate %",
-                hovertemplate="<b>%{x}</b><br>Win Rate: %{y}%<extra></extra>",
-            )
-            # Season average reference line
-            season_avg = round(trend_df["Wins"].sum() / trend_df["Matches"].sum() * 100, 1)
-            fig_trend.add_hline(
-                y=season_avg, line_dash="dash", line_color="gray",
-                annotation_text=f"Season avg {season_avg}%",
-                annotation_position="bottom right",
-            )
+            all_series = {}
+
+            if show_overall:
+                df_overall = build_trend(involved, "Overall")
+                if not df_overall.empty:
+                    all_series["Overall"] = df_overall
+                    season_avg = round(df_overall["Wins"].sum() / df_overall["Matches"].sum() * 100, 1)
+                    fig_trend.add_scatter(
+                        x=df_overall["Tournament"], y=df_overall["Win Rate %"],
+                        mode="lines+markers", name=f"Overall (avg {season_avg}%)",
+                        marker=dict(size=9, color=colours["Overall"]),
+                        line=dict(color=colours["Overall"], width=2, dash="dot"),
+                        hovertemplate="<b>%{x}</b><br>Overall: %{y}%<extra></extra>",
+                    )
+
+            for cat in selected_cats:
+                df_cat = build_trend(involved[involved["category"] == cat], cat)
+                if not df_cat.empty:
+                    all_series[cat] = df_cat
+                    cat_avg = round(df_cat["Wins"].sum() / df_cat["Matches"].sum() * 100, 1)
+                    fig_trend.add_scatter(
+                        x=df_cat["Tournament"], y=df_cat["Win Rate %"],
+                        mode="lines+markers", name=f"{cat} (avg {cat_avg}%)",
+                        marker=dict(size=9, color=colours[cat]),
+                        line=dict(color=colours[cat], width=2),
+                        hovertemplate=f"<b>%{{x}}</b><br>{cat}: %{{y}}%<extra></extra>",
+                    )
+
             fig_trend.update_layout(
                 yaxis=dict(title="Win Rate %", range=[0, 105]),
-                xaxis=dict(title="Tournament", tickangle=-30),
-                height=400,
+                xaxis=dict(title="", tickangle=-30),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                height=420,
             )
             st.plotly_chart(fig_trend, use_container_width=True)
 
-            # Summary table
-            st.dataframe(
-                trend_df[["Tournament", "Matches", "Wins", "Losses", "Win Rate %"]],
-                use_container_width=True, hide_index=True
-            )
+            # Detail tables per selected series
+            for label, df_s in all_series.items():
+                with st.expander(f"{label} — tournament detail"):
+                    st.dataframe(
+                        df_s[["Tournament", "Matches", "Wins", "Losses", "Win Rate %"]],
+                        use_container_width=True, hide_index=True
+                    )
 
-            # First-half vs second-half split
-            mid = len(trend_df) // 2
-            if mid > 0:
-                first_half = trend_df.iloc[:mid]
-                second_half = trend_df.iloc[mid:]
-                fh_rate = round(first_half["Wins"].sum() / first_half["Matches"].sum() * 100, 1)
-                sh_rate = round(second_half["Wins"].sum() / second_half["Matches"].sum() * 100, 1)
+            # First-half vs second-half split (overall only)
+            if "Overall" in all_series and len(all_series["Overall"]) >= 2:
+                df_overall = all_series["Overall"]
+                mid = len(df_overall) // 2
+                fh = df_overall.iloc[:mid]
+                sh = df_overall.iloc[mid:]
+                fh_rate = round(fh["Wins"].sum() / fh["Matches"].sum() * 100, 1)
+                sh_rate = round(sh["Wins"].sum() / sh["Matches"].sum() * 100, 1)
                 delta = round(sh_rate - fh_rate, 1)
-                st.subheader("Season Split")
+                st.subheader("Season Split (Overall)")
                 c1, c2, c3 = st.columns(3)
                 c1.metric("First Half Win Rate", f"{fh_rate}%")
                 c2.metric("Second Half Win Rate", f"{sh_rate}%")
                 c3.metric("Change", f"{'+' if delta >= 0 else ''}{delta}%",
                           delta=delta, delta_color="normal")
-        else:
-            st.info("No match data found for this player.")
 
 
 # ── Birth Year Cohort tab ──────────────────────────────────────────────────────
