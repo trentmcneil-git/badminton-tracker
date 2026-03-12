@@ -378,23 +378,125 @@ with tab_overview:
     col3.metric("Matches", len(all_matches))
     col4.metric("Clubs", all_players["club"].nunique())
 
-    st.subheader("Matches by Event")
-    event_counts = all_matches["event"].value_counts().reset_index()
-    event_counts.columns = ["Event", "Matches"]
-    fig = px.bar(event_counts, x="Event", y="Matches", color="Matches",
-                 color_continuous_scale="Reds")
-    fig.update_layout(showlegend=False, coloraxis_showscale=False)
-    st.plotly_chart(fig, use_container_width=True)
+    # ── Build club summary table (used by all three sections below) ────────────
+    _ov_rows = []
+    for _club in all_players["club"].dropna().unique():
+        _cp = all_players[all_players["club"] == _club]["player_name"].unique()
+        _cm = all_matches[all_matches["player1"].isin(_cp) | all_matches["player2"].isin(_cp)]
+        _wins = int(_cm["winner"].isin(_cp).sum())
+        _total = len(_cm)
+        _ov_rows.append({
+            "Club": _club,
+            "Players": int(len(_cp)),
+            "Matches": _total,
+            "Wins": _wins,
+            "Win Rate %": round(_wins / _total * 100, 1) if _total else 0,
+        })
+    ov_clubs = pd.DataFrame(_ov_rows).sort_values("Win Rate %", ascending=False)
 
+    # ── Section 1: Top Clubs by Player Count ──────────────────────────────────
     st.subheader("Top Clubs by Player Count")
-    club_counts = all_players.groupby("club")["player_name"].nunique().reset_index()
-    club_counts.columns = ["Club", "Players"]
-    club_counts = club_counts.sort_values("Players", ascending=False).head(15)
-    fig2 = px.bar(club_counts, x="Club", y="Players", color="Players",
-                  color_continuous_scale="Blues")
-    fig2.update_layout(showlegend=False, coloraxis_showscale=False,
-                       xaxis_tickangle=-30)
-    st.plotly_chart(fig2, use_container_width=True)
+    top_by_players = ov_clubs.sort_values("Players", ascending=False).head(15)
+    fig_pc = px.bar(
+        top_by_players.sort_values("Players", ascending=True),
+        x="Players", y="Club", orientation="h",
+        color="Players", color_continuous_scale="Blues",
+        hover_data=["Matches", "Wins", "Win Rate %"],
+    )
+    fig_pc.update_layout(coloraxis_showscale=False,
+                         margin=dict(l=0, r=0, t=20, b=0),
+                         height=max(300, len(top_by_players) * 32))
+    st.plotly_chart(fig_pc, use_container_width=True)
+
+    st.divider()
+
+    # ── Section 2: Top Clubs by Overall Win Rate ───────────────────────────────
+    st.subheader("Top Clubs by Overall Win Rate")
+    st.caption("Minimum 30 matches to qualify")
+    top_wr = ov_clubs[ov_clubs["Matches"] >= 30].head(15)
+    col_tbl, col_chart = st.columns([1, 2])
+    with col_tbl:
+        st.dataframe(
+            top_wr[["Club", "Players", "Matches", "Wins", "Win Rate %"]],
+            hide_index=True, use_container_width=True
+        )
+    with col_chart:
+        fig_wr = px.bar(
+            top_wr.sort_values("Win Rate %", ascending=True),
+            x="Win Rate %", y="Club", orientation="h",
+            color="Win Rate %", color_continuous_scale="RdYlGn",
+            range_color=[30, 70],
+            hover_data=["Players", "Matches", "Wins"],
+        )
+        fig_wr.update_layout(
+            coloraxis_showscale=False,
+            margin=dict(l=0, r=0, t=20, b=0),
+            height=max(300, len(top_wr) * 32),
+        )
+        st.plotly_chart(fig_wr, use_container_width=True)
+
+    st.divider()
+
+    # ── Section 3: Club Win Rate by Discipline (GS/GD/BS/BD/XD) ──────────────
+    st.subheader("Club Win Rate by Event")
+    st.caption("Which clubs develop the strongest players in each discipline — minimum 20 matches to qualify")
+
+    _EVENT_PREFIXES = {
+        "GS": "GS — Girls Singles",
+        "GD": "GD — Girls Doubles",
+        "BS": "BS — Boys Singles",
+        "BD": "BD — Boys Doubles",
+        "XD": "XD — Mixed Doubles",
+    }
+    _COLOURS = {"GS": "#3498db", "GD": "#9b59b6", "BS": "#2ecc71", "BD": "#1abc9c", "XD": "#e67e22"}
+
+    ev_rows = []
+    for _club in all_players["club"].dropna().unique():
+        _cp = set(all_players[all_players["club"] == _club]["player_name"].unique())
+        for _prefix, _label in _EVENT_PREFIXES.items():
+            _evm = all_matches[
+                all_matches["event"].str.upper().str.startswith(_prefix, na=False) &
+                (all_matches["player1"].isin(_cp) | all_matches["player2"].isin(_cp))
+            ]
+            if len(_evm) < 20:
+                continue
+            _w = int(_evm["winner"].isin(_cp).sum())
+            ev_rows.append({
+                "Club": _club,
+                "Event": _prefix,
+                "Event Label": _label,
+                "Matches": len(_evm),
+                "Wins": _w,
+                "Win Rate %": round(_w / len(_evm) * 100, 1),
+            })
+
+    if ev_rows:
+        ev_df = pd.DataFrame(ev_rows)
+        for _prefix, _label in _EVENT_PREFIXES.items():
+            sub = ev_df[ev_df["Event"] == _prefix].sort_values("Win Rate %", ascending=False).head(12)
+            if sub.empty:
+                continue
+            with st.expander(f"**{_label}**", expanded=True):
+                c_tbl, c_chart = st.columns([1, 2])
+                with c_tbl:
+                    st.dataframe(
+                        sub[["Club", "Matches", "Wins", "Win Rate %"]],
+                        hide_index=True, use_container_width=True
+                    )
+                with c_chart:
+                    fig_ev = px.bar(
+                        sub.sort_values("Win Rate %", ascending=True),
+                        x="Win Rate %", y="Club", orientation="h",
+                        color="Win Rate %", color_continuous_scale="RdYlGn",
+                        range_color=[30, 70],
+                        hover_data=["Matches", "Wins"],
+                    )
+                    fig_ev.update_layout(
+                        coloraxis_showscale=False,
+                        margin=dict(l=0, r=0, t=10, b=0),
+                        height=max(200, len(sub) * 30),
+                    )
+                    st.plotly_chart(fig_ev, use_container_width=True)
 
 
 # ── Player Analytics tab ──────────────────────────────────────────────────────
