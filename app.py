@@ -410,7 +410,7 @@ with tab_overview:
 
     st.divider()
 
-    # Alberta clubs — used to filter sections 2 and 3
+    # Alberta clubs — complete list used to filter sections 2 and 3
     ALBERTA_CLUBS = {
         "Modu Club",
         "Drive Sports Badminton Club",
@@ -426,14 +426,26 @@ with tab_overview:
         "Kshatriya Badminton Academy",
         "Fort McMurray Junior Badminton Club",
         "Red Willow Badminton Club",
+        "Grande Prairie Badminton Club",
+        "Lethbridge Badminton Club",
+        "Stettler Junior Badminton Club",
+        "Sunridge Badminton Centre",
+        "Riverbend Badminton Club",
     }
 
-    # ── Section 2: Top Alberta Clubs by Overall Win Rate ──────────────────────
-    st.subheader("Top Alberta Clubs by Overall Win Rate")
-    st.caption("Alberta clubs only — minimum 30 matches to qualify")
-    top_wr = ov_clubs[
-        ov_clubs["Club"].isin(ALBERTA_CLUBS) & (ov_clubs["Matches"] >= 30)
-    ].sort_values("Win Rate %", ascending=False)
+    # ── Shared filter toggle (applies to sections 2 and 3) ────────────────────
+    ab_only = st.toggle("🏔️ Alberta clubs only", value=True, key="ov_ab_toggle")
+
+    # ── Section 2: Top Clubs by Overall Win Rate ───────────────────────────────
+    st.subheader("Top Clubs by Overall Win Rate")
+    st.caption(
+        f"{'Alberta clubs only' if ab_only else 'All clubs'} — minimum 30 matches to qualify"
+    )
+    _wr_base = ov_clubs[ov_clubs["Matches"] >= 30].copy()
+    if ab_only:
+        _wr_base = _wr_base[_wr_base["Club"].isin(ALBERTA_CLUBS)]
+    top_wr = _wr_base.sort_values("Win Rate %", ascending=False)
+
     col_tbl, col_chart = st.columns([1, 2])
     with col_tbl:
         st.dataframe(
@@ -457,9 +469,12 @@ with tab_overview:
 
     st.divider()
 
-    # ── Section 3: Alberta Club Win Rate by Discipline (GS/GD/BS/BD/XD) ───────
-    st.subheader("Alberta Club Win Rate by Event")
-    st.caption("Which Alberta clubs develop the strongest players in each discipline — minimum 20 matches to qualify")
+    # ── Section 3: Club Win Rate by Discipline (GS/GD/BS/BD/XD) ──────────────
+    st.subheader("Club Win Rate by Event")
+    st.caption(
+        f"{'Alberta clubs only' if ab_only else 'All clubs'} — "
+        "which clubs develop the strongest players in each discipline — minimum 20 matches to qualify"
+    )
 
     _EVENT_PREFIXES = {
         "GS": "GS — Girls Singles",
@@ -469,8 +484,10 @@ with tab_overview:
         "XD": "XD — Mixed Doubles",
     }
 
+    _clubs_to_scan = ALBERTA_CLUBS if ab_only else set(all_players["club"].dropna().unique())
+
     ev_rows = []
-    for _club in ALBERTA_CLUBS:
+    for _club in _clubs_to_scan:
         _cp = set(all_players[all_players["club"] == _club]["player_name"].unique())
         if not _cp:
             continue
