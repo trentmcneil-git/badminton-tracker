@@ -305,7 +305,7 @@ with tab_overview:
     fig = px.bar(event_counts, x="Event", y="Matches", color="Matches",
                  color_continuous_scale="Reds")
     fig.update_layout(showlegend=False, coloraxis_showscale=False)
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Top Clubs by Player Count")
     club_counts = all_players.groupby("club")["player_name"].nunique().reset_index()
@@ -315,7 +315,7 @@ with tab_overview:
                   color_continuous_scale="Blues")
     fig2.update_layout(showlegend=False, coloraxis_showscale=False,
                        xaxis_tickangle=-30)
-    st.plotly_chart(fig2, width='stretch')
+    st.plotly_chart(fig2, use_container_width=True)
 
 
 # ── Player Analytics tab ──────────────────────────────────────────────────────
@@ -330,53 +330,54 @@ with tab_player:
             st.warning("No match data found for this player.")
         else:
             birth_year = get_birth_year(selected_player, registry)
+
+            # ── Player summary cards ───────────────────────────────────────────
             col1, col2, col3, col4, col5 = st.columns(5)
             col1.metric("Club", stats["club"])
             col2.metric("Birth Year", birth_year if birth_year else "—")
             col3.metric("Total Matches", stats["total_matches"])
-            col4.metric("Wins", stats["wins"])
+            col4.metric("Wins / Losses", f"{stats['wins']} / {stats['losses']}")
             col5.metric("Win Rate", f"{stats['win_rate']}%")
 
-            st.subheader("Performance by Event")
+            # ── Performance by event ───────────────────────────────────────────
+            st.subheader("Results by Event")
             be = stats["by_event"]
             if not be.empty:
+                display_be = be.rename(columns={
+                    "event": "Event", "wins": "Wins",
+                    "losses": "Losses", "matches": "Matches",
+                    "win_rate": "Win Rate %"
+                })[["Event", "Matches", "Wins", "Losses", "Win Rate %"]]
+                st.dataframe(display_be, use_container_width=True, hide_index=True)
+
                 fig = go.Figure()
                 fig.add_bar(name="Wins", x=be["event"], y=be["wins"],
                             marker_color="#2ecc71")
                 fig.add_bar(name="Losses", x=be["event"], y=be["losses"],
                             marker_color="#e74c3c")
                 fig.update_layout(barmode="stack", xaxis_title="Event",
-                                  yaxis_title="Matches")
-                st.plotly_chart(fig, width='stretch')
+                                  yaxis_title="Matches", height=350)
+                st.plotly_chart(fig, use_container_width=True)
 
-                st.dataframe(
-                    be.rename(columns={
-                        "event": "Event", "wins": "Wins",
-                        "losses": "Losses", "matches": "Matches",
-                        "win_rate": "Win Rate %"
-                    }),
-                    width='stretch',
-                    hide_index=True,
-                )
-
+            # ── Match history ──────────────────────────────────────────────────
             st.subheader("Match History")
             history = stats["match_history"][
-                ["tournament_id", "date", "event", "round", "player1", "player2", "winner", "score"]
+                ["date", "event", "round", "player1", "player2", "winner", "score"]
             ].copy()
-            history["result"] = history["winner"].apply(
+            history["Result"] = history["winner"].apply(
                 lambda w: "Win" if w == selected_player else "Loss"
             )
-            history["opponent"] = history.apply(
+            history["Opponent"] = history.apply(
                 lambda r: r["player2"] if r["player1"] == selected_player else r["player1"],
                 axis=1,
             )
-            display_cols = ["date", "event", "round", "opponent", "result", "score"]
+            history = history.rename(columns={
+                "date": "Date", "event": "Event",
+                "round": "Round", "score": "Score"
+            })
             st.dataframe(
-                history[display_cols].rename(columns={
-                    "date": "Date", "event": "Event", "round": "Round",
-                    "opponent": "Opponent", "result": "Result", "score": "Score"
-                }),
-                width='stretch',
+                history[["Date", "Event", "Round", "Opponent", "Result", "Score"]],
+                use_container_width=True,
                 hide_index=True,
             )
 
@@ -393,7 +394,7 @@ with tab_club:
             st.info("No match data for players from this club.")
         else:
             st.subheader(f"{selected_club} — Player Leaderboard")
-            st.dataframe(club_df, width='stretch', hide_index=True)
+            st.dataframe(club_df, use_container_width=True, hide_index=True)
 
             fig = px.bar(
                 club_df.sort_values("Win Rate %", ascending=True),
@@ -402,7 +403,7 @@ with tab_club:
                 range_color=[0, 100],
             )
             fig.update_layout(coloraxis_showscale=False)
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("All Clubs Summary")
     all_club_rows = []
@@ -423,7 +424,7 @@ with tab_club:
     all_clubs_df = pd.DataFrame(all_club_rows)
     if not all_clubs_df.empty:
         all_clubs_df = all_clubs_df.sort_values("Players", ascending=False)
-    st.dataframe(all_clubs_df, width='stretch', hide_index=True)
+    st.dataframe(all_clubs_df, use_container_width=True, hide_index=True)
 
     # ── Win Rate by Discipline ─────────────────────────────────────────────────
     st.subheader("Top Clubs by Win Rate — by Discipline")
@@ -445,7 +446,7 @@ with tab_club:
             with col_table:
                 st.dataframe(
                     sub[["Club", "Matches", "Wins", "Losses", "Win Rate %"]],
-                    hide_index=True, width='stretch'
+                    hide_index=True, use_container_width=True
                 )
             with col_chart:
                 fig_d = px.bar(
@@ -459,7 +460,7 @@ with tab_club:
                     margin=dict(l=0, r=0, t=20, b=0),
                     height=max(200, len(sub) * 30),
                 )
-                st.plotly_chart(fig_d, width='stretch')
+                st.plotly_chart(fig_d, use_container_width=True)
 
 
 # ── Match Results tab ─────────────────────────────────────────────────────────
@@ -497,6 +498,6 @@ with tab_matches:
                 "winner": "Winner", "score": "Score"
             }
         ),
-        width='stretch',
+        use_container_width=True,
         hide_index=True,
     )
