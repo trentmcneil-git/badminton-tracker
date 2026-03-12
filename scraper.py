@@ -130,22 +130,21 @@ def scrape_matches(tournament_id: str) -> pd.DataFrame:
             event = normalize_event(title_items[0].get_text(strip=True)) if len(title_items) > 0 else ""
             round_name = title_items[1].get_text(strip=True) if len(title_items) > 1 else ""
 
-            # Players (one .match__row per player/side)
+            # Players (one .match__row per side; doubles rows have 2 player links each)
             player_rows = match_div.select(".match__row")
-            players = []
+            sides = []   # list of [player_name, ...] per side
             winners = []
             for pr in player_rows:
-                name_el = pr.select_one(".match__row-title-value-content .nav-link__value")
-                player_name = normalize_player_name(name_el.get_text(strip=True)) if name_el else ""
+                # select ALL player links in this row (1 for singles, 2 for doubles/XD)
+                name_els = pr.select(".match__row-title-value-content .nav-link__value")
+                side_players = [
+                    normalize_player_name(el.get_text(strip=True))
+                    for el in name_els
+                    if el.get_text(strip=True)
+                ]
                 is_winner = bool(pr.select_one(".tag--round"))
-                players.append(player_name)
+                sides.append(side_players)
                 winners.append(is_winner)
-
-            player1 = players[0] if len(players) > 0 else ""
-            player2 = players[1] if len(players) > 1 else ""
-            winner = player1 if (len(winners) > 0 and winners[0]) else (
-                player2 if (len(winners) > 1 and winners[1]) else ""
-            )
 
             # Scores — each .points ul is one set; two .points__cell per set
             sets = match_div.select(".points")
@@ -157,17 +156,33 @@ def scrape_matches(tournament_id: str) -> pd.DataFrame:
 
             score_str = ", ".join(scores)
 
-            if player1 and player2:
-                rows.append({
-                    "tournament_id": tournament_id,
-                    "date": match_date,
-                    "event": event,
-                    "round": round_name,
-                    "player1": player1,
-                    "player2": player2,
-                    "winner": winner,
-                    "score": score_str,
-                })
+            if len(sides) < 2:
+                continue
+
+            side1, side2 = sides[0], sides[1]
+            # Skip byes / walkovers where one side has no players
+            if not side1 or not side2:
+                continue
+            side1_wins = winners[0] if winners else False
+
+            # Pair players by position within each side so every individual gets a row:
+            # singles → 1 row, doubles → 2 rows (one per player slot), etc.
+            n_pairs = max(len(side1), len(side2))
+            for i in range(n_pairs):
+                p1 = side1[i] if i < len(side1) else side1[-1]
+                p2 = side2[i] if i < len(side2) else side2[-1]
+                w = p1 if side1_wins else p2
+                if p1 and p2:
+                    rows.append({
+                        "tournament_id": tournament_id,
+                        "date": match_date,
+                        "event": event,
+                        "round": round_name,
+                        "player1": p1,
+                        "player2": p2,
+                        "winner": w,
+                        "score": score_str,
+                    })
 
     return pd.DataFrame(rows)
 
