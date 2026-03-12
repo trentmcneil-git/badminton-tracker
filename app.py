@@ -74,6 +74,62 @@ def get_birth_year(player_name: str, registry: pd.DataFrame) -> int | None:
     return int(match["birth_year"].iloc[0]) if not match.empty else None
 
 
+# U-age category -> birth year range for 2025-26 season
+_AGE_TO_BIRTH_RANGE = {
+    "U11": (2015, 2016), "U13": (2013, 2014), "U15": (2011, 2012),
+    "U17": (2009, 2010), "U19": (2007, 2008),
+}
+
+def infer_birth_year_range(player_name: str, matches: pd.DataFrame) -> tuple | None:
+    """
+    Infer birth year range from the youngest age category a player has competed in.
+    Returns (min_year, max_year) or None.
+    """
+    import re
+    involved = matches[
+        (matches["player1"] == player_name) | (matches["player2"] == player_name)
+    ]
+    if involved.empty:
+        return None
+    # Find the youngest age group (smallest U number = youngest age = most recent birth year)
+    best = None
+    for event in involved["event"].dropna().unique():
+        m = re.search(r'U(\d+)', str(event), re.IGNORECASE)
+        if m:
+            u_age = int(m.group(1))
+            rng = _AGE_TO_BIRTH_RANGE.get(f"U{u_age}")
+            if rng:
+                # Youngest category (highest U number) gives us the broadest range,
+                # but lowest U number gives us the tightest birth year constraint
+                if best is None or u_age < best[0]:
+                    best = (u_age, rng)
+    return best[1] if best else None
+
+
+def build_birth_year_index(matches: pd.DataFrame, registry: pd.DataFrame) -> dict:
+    """
+    Build a dict of player_name -> birth_year (exact from registry, or
+    midpoint of inferred range as fallback).
+    """
+    reg_lookup = {}
+    if not registry.empty and "_norm" in registry.columns:
+        reg_lookup = dict(zip(registry["_norm"], registry["birth_year"]))
+
+    all_names = pd.concat([matches["player1"], matches["player2"]]).dropna().unique()
+    index = {}
+    for name in all_names:
+        norm = normalize_name_for_lookup(name)
+        if norm in reg_lookup:
+            index[name] = int(reg_lookup[norm])
+        else:
+            rng = infer_birth_year_range(name, matches)
+            if rng:
+                # Use the later year (younger end) so U13 players born 2013 or 2014
+                # both appear when filtering by either year
+                index[name] = rng[1]  # store the latest (youngest) birth year
+    return index
+
+
 def save_data(players: pd.DataFrame, matches: pd.DataFrame, tournament_id: str):
     """Append new data, avoiding duplicates for the same tournament."""
     # Players
@@ -276,6 +332,8 @@ all_matches = load_matches()
 registry = load_registry()
 if not registry.empty:
     registry["_norm"] = registry["player_name"].apply(normalize_name_for_lookup)
+# Birth year index covers all match players (exact from registry + inferred from age category)
+birth_year_index = build_birth_year_index(all_matches, registry)
 
 if all_matches.empty:
     st.info("No data yet — add a tournament URL in the sidebar to get started.")
@@ -554,22 +612,30 @@ with tab_trend:
 # ── Birth Year Cohort tab ──────────────────────────────────────────────────────
 with tab_cohort:
     st.subheader("Birth Year Cohort Leaderboard")
-    st.caption("Compare players born in the same year, across all events.")
+    st.caption(
+        "Compare all players born in the same year. "
+        "Birth years come from the player registry (exact) or are inferred from "
+        "the youngest age category each player has competed in (approximate)."
+    )
 
-    if registry.empty:
-        st.warning("Player registry not loaded — click 'Refresh Player Registry' in the sidebar.")
+    available_years = sorted(set(birth_year_index.values()), reverse=True)
+    if not available_years:
+        st.warning("No birth year data available. Load tournaments and refresh the Player Registry.")
     else:
-        birth_years = sorted(registry["birth_year"].dropna().unique(), reverse=True)
-        selected_year = st.selectbox("Select birth year", birth_years, index=None,
+        selected_year = st.selectbox("Select birth year", available_years, index=None,
                                      placeholder="Choose a year...")
 
         if selected_year:
-            cohort_players = registry[registry["birth_year"] == selected_year]["player_name"].tolist()
+            cohort_players = [p for p, y in birth_year_index.items() if y == selected_year]
+
+            # Flag which players have exact vs inferred birth year
+            reg_norms = set(registry["_norm"]) if not registry.empty and "_norm" in registry.columns else set()
 
             cohort_rows = []
             for p in cohort_players:
                 stats = get_player_stats(p, all_matches, all_players)
                 if stats and stats["total_matches"] > 0:
+                    exact = normalize_name_for_lookup(p) in reg_norms
                     cohort_rows.append({
                         "Player": p,
                         "Club": stats["club"],
@@ -577,12 +643,17 @@ with tab_cohort:
                         "Wins": stats["wins"],
                         "Losses": stats["losses"],
                         "Win Rate %": stats["win_rate"],
-                        "Events": ", ".join(stats["events"]),
+                        "Birth Year Source": "Registry" if exact else "Inferred",
                     })
 
             if cohort_rows:
                 cohort_df = pd.DataFrame(cohort_rows).sort_values("Win Rate %", ascending=False)
-                st.caption(f"{len(cohort_df)} ranked players born in {selected_year}")
+                exact_count = (cohort_df["Birth Year Source"] == "Registry").sum()
+                st.caption(
+                    f"{len(cohort_df)} players born in {selected_year} "
+                    f"({exact_count} confirmed from registry, "
+                    f"{len(cohort_df) - exact_count} inferred from age category)"
+                )
 
                 st.dataframe(cohort_df, use_container_width=True, hide_index=True)
 
@@ -591,15 +662,15 @@ with tab_cohort:
                     x="Win Rate %", y="Player", orientation="h",
                     color="Win Rate %", color_continuous_scale="RdYlGn",
                     range_color=[0, 100],
-                    hover_data=["Club", "Matches", "Wins", "Losses"],
+                    hover_data=["Club", "Matches", "Wins", "Losses", "Birth Year Source"],
                 )
                 fig_cohort.update_layout(
                     coloraxis_showscale=False,
-                    height=max(300, len(cohort_df) * 35),
+                    height=max(300, len(cohort_df) * 28),
                 )
                 st.plotly_chart(fig_cohort, use_container_width=True)
             else:
-                st.info(f"No match data found for ranked players born in {selected_year}.")
+                st.info(f"No match data found for players born in {selected_year}.")
 
 
 # ── Head-to-Head tab ──────────────────────────────────────────────────────────
