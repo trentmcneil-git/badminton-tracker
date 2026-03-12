@@ -156,6 +156,32 @@ def scrape_matches(tournament_id: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def scrape_player_registry() -> pd.DataFrame:
+    """
+    Scrape the Alberta Junior ranking page to get player names, member IDs,
+    and birth years. Returns a deduplicated DataFrame keyed on member_id.
+    """
+    url = "https://badmintoncanada.tournamentsoftware.com/ranking/ranking.aspx?id=50504"
+    resp = requests.get(url, headers=HEADERS, timeout=15)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    seen = {}  # member_id -> dict, to deduplicate
+    for row in soup.select("table tr"):
+        cells = [td.get_text(strip=True) for td in row.select("td")]
+        # Data rows: ['rank', '', '', 'Name', '', 'AB#####', 'YYYY', ...]
+        if len(cells) >= 7 and cells[5].startswith("AB") and cells[6].isdigit():
+            member_id = cells[5]
+            if member_id not in seen:
+                seen[member_id] = {
+                    "player_name": cells[3],
+                    "member_id": member_id,
+                    "birth_year": int(cells[6]),
+                }
+
+    return pd.DataFrame(seen.values())
+
+
 def scrape_tournament(url: str) -> dict:
     """
     Main entry point. Pass any tournament URL and get back:

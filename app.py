@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-from scraper import scrape_tournament, extract_tournament_id
+from scraper import scrape_tournament, extract_tournament_id, scrape_player_registry
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -24,6 +24,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 TOURNAMENTS_FILE = os.path.join(DATA_DIR, "tournaments.json")
 PLAYERS_FILE = os.path.join(DATA_DIR, "players.csv")
 MATCHES_FILE = os.path.join(DATA_DIR, "matches.csv")
+REGISTRY_FILE = os.path.join(DATA_DIR, "player_registry.csv")
 
 
 # ── Persistence helpers ───────────────────────────────────────────────────────
@@ -51,6 +52,30 @@ def load_matches() -> pd.DataFrame:
     if os.path.exists(MATCHES_FILE):
         return pd.read_csv(MATCHES_FILE)
     return pd.DataFrame(columns=["tournament_id", "date", "event", "round", "player1", "player2", "winner", "score"])
+
+
+def load_registry() -> pd.DataFrame:
+    if os.path.exists(REGISTRY_FILE):
+        return pd.read_csv(REGISTRY_FILE)
+    return pd.DataFrame(columns=["player_name", "member_id", "birth_year"])
+
+
+def normalize_name_for_lookup(name: str) -> str:
+    """Convert 'LAST, First' (tournament format) or 'First Last' to 'first last'."""
+    name = str(name).strip()
+    if ',' in name:
+        parts = name.split(',', 1)
+        return (parts[1].strip() + ' ' + parts[0].strip()).lower()
+    return name.lower()
+
+
+def get_birth_year(player_name: str, registry: pd.DataFrame) -> int | None:
+    """Look up a player's birth year from the registry by normalized name."""
+    if registry.empty:
+        return None
+    norm = normalize_name_for_lookup(player_name)
+    match = registry[registry["_norm"] == norm]
+    return int(match["birth_year"].iloc[0]) if not match.empty else None
 
 
 def save_data(players: pd.DataFrame, matches: pd.DataFrame, tournament_id: str):
@@ -221,6 +246,24 @@ with st.sidebar:
             st.warning("Please enter a tournament URL.")
 
     st.divider()
+    st.header("Player Registry")
+    registry_exists = os.path.exists(REGISTRY_FILE)
+    if registry_exists:
+        reg = pd.read_csv(REGISTRY_FILE)
+        st.caption(f"{len(reg)} ranked players with birth years")
+    else:
+        st.caption("Not yet loaded")
+    if st.button("Refresh Player Registry"):
+        with st.spinner("Fetching Alberta Junior rankings..."):
+            try:
+                reg_df = scrape_player_registry()
+                reg_df.to_csv(REGISTRY_FILE, index=False)
+                st.success(f"Loaded {len(reg_df)} players with birth years")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    st.divider()
     st.header("Loaded Tournaments")
     tournaments = load_tournaments()
     if tournaments:
@@ -234,6 +277,9 @@ with st.sidebar:
 # Load data
 all_players = load_players()
 all_matches = load_matches()
+registry = load_registry()
+if not registry.empty:
+    registry["_norm"] = registry["player_name"].apply(normalize_name_for_lookup)
 
 if all_matches.empty:
     st.info("No data yet — add a tournament URL in the sidebar to get started.")
@@ -283,11 +329,13 @@ with tab_player:
         if not stats:
             st.warning("No match data found for this player.")
         else:
-            col1, col2, col3, col4 = st.columns(4)
+            birth_year = get_birth_year(selected_player, registry)
+            col1, col2, col3, col4, col5 = st.columns(5)
             col1.metric("Club", stats["club"])
-            col2.metric("Total Matches", stats["total_matches"])
-            col3.metric("Wins", stats["wins"])
-            col4.metric("Win Rate", f"{stats['win_rate']}%")
+            col2.metric("Birth Year", birth_year if birth_year else "—")
+            col3.metric("Total Matches", stats["total_matches"])
+            col4.metric("Wins", stats["wins"])
+            col5.metric("Win Rate", f"{stats['win_rate']}%")
 
             st.subheader("Performance by Event")
             be = stats["by_event"]
