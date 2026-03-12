@@ -566,19 +566,25 @@ with tab_trend:
         # Classify each match into an event category based on event prefix
         def event_category(event):
             e = str(event).upper().strip()
-            if e.startswith("BS") or e.startswith("GS"):
-                return "Singles"
-            if e.startswith("BD") or e.startswith("GD"):
-                return "Doubles"
-            if e.startswith("XD"):
-                return "XD"
+            for prefix in ("GS", "GD", "BS", "BD", "XD"):
+                if e.startswith(prefix):
+                    return prefix
             return "Other"
 
         involved["category"] = involved["event"].apply(event_category)
 
         # Which categories does this player actually have?
-        player_categories = [c for c in ["Singles", "Doubles", "XD"]
+        player_categories = [c for c in ["GS", "GD", "BS", "BD", "XD"]
                              if c in involved["category"].values]
+
+        # Full display labels for each abbreviation
+        cat_labels = {
+            "GS": "GS — Girls Singles",
+            "GD": "GD — Girls Doubles",
+            "BS": "BS — Boys Singles",
+            "BD": "BD — Boys Doubles",
+            "XD": "XD — Mixed Doubles",
+        }
 
         if not player_categories:
             st.info("No match data found for this player.")
@@ -588,14 +594,17 @@ with tab_trend:
             selected_cats = st.multiselect(
                 "Show individual event types",
                 options=player_categories,
+                format_func=lambda c: cat_labels.get(c, c),
                 default=player_categories,
             )
 
             # Colour palette per series
             colours = {
                 "Overall": "#95a5a6",
-                "Singles": "#3498db",
-                "Doubles": "#2ecc71",
+                "GS": "#3498db",
+                "GD": "#9b59b6",
+                "BS": "#2ecc71",
+                "BD": "#1abc9c",
                 "XD": "#e67e22",
             }
 
@@ -639,12 +648,13 @@ with tab_trend:
                 if not df_cat.empty:
                     all_series[cat] = df_cat
                     cat_avg = round(df_cat["Wins"].sum() / df_cat["Matches"].sum() * 100, 1)
+                    label = cat_labels.get(cat, cat)
                     fig_trend.add_scatter(
                         x=df_cat["Tournament"], y=df_cat["Win Rate %"],
-                        mode="lines+markers", name=f"{cat} (avg {cat_avg}%)",
-                        marker=dict(size=9, color=colours[cat]),
-                        line=dict(color=colours[cat], width=2),
-                        hovertemplate=f"<b>%{{x}}</b><br>{cat}: %{{y}}%<extra></extra>",
+                        mode="lines+markers", name=f"{label} (avg {cat_avg}%)",
+                        marker=dict(size=9, color=colours.get(cat, "#aaaaaa")),
+                        line=dict(color=colours.get(cat, "#aaaaaa"), width=2),
+                        hovertemplate=f"<b>%{{x}}</b><br>{label}: %{{y}}%<extra></extra>",
                     )
 
             fig_trend.update_layout(
@@ -657,7 +667,8 @@ with tab_trend:
 
             # Detail tables per selected series
             for label, df_s in all_series.items():
-                with st.expander(f"{label} — tournament detail"):
+                display_label = cat_labels.get(label, label)
+                with st.expander(f"{display_label} — tournament detail"):
                     st.dataframe(
                         df_s[["Tournament", "Matches", "Wins", "Losses", "Win Rate %"]],
                         use_container_width=True, hide_index=True
