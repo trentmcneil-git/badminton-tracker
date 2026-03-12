@@ -431,6 +431,7 @@ with tab_overview:
         "Stettler Junior Badminton Club",
         "Sunridge Badminton Centre",
         "Riverbend Badminton Club",
+        "GX Badminton",
     }
 
     # ── Shared filter toggle (applies to sections 2 and 3) ────────────────────
