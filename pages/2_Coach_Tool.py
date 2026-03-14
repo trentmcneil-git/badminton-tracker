@@ -17,9 +17,9 @@ supabase = get_supabase()
 
 # ── Session state init ────────────────────────────────────────────────────────
 for key, default in [
-    ("coach_user", None),
-    ("match_session_id", None),
-    ("match_stage", "pre_game"),
+    ("coach_user",        None),
+    ("match_session_id",  None),
+    ("match_stage",       "pre_game"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -42,8 +42,21 @@ def load_drive_sports_players():
         return sorted(ds.tolist())
     return []
 
-tournaments   = load_tournaments()
-ds_players    = load_drive_sports_players()
+@st.cache_data
+def load_all_known_players():
+    """All players seen across all tournaments — used for opponent dropdowns."""
+    path = Path("data/players.csv")
+    if path.exists():
+        df = pd.read_csv(path)
+        return sorted(df["player_name"].dropna().unique().tolist())
+    return []
+
+tournaments      = load_tournaments()
+ds_players       = load_drive_sports_players()
+all_players      = load_all_known_players()
+MANUAL_ENTRY     = "➕ Enter manually..."
+player_options   = all_players + [MANUAL_ENTRY]
+
 tourn_options = {
     v["name"]: k
     for k, v in tournaments.items()
@@ -59,6 +72,26 @@ EVENTS = (
     ["XD U11","XD U13","XD U15","XD U17","XD U19"]
 )
 ROUNDS = ["R1","R2","R3","Round of 32","Round of 16","QF","SF","F","3rd Place"]
+
+# ── Reusable player picker widget ─────────────────────────────────────────────
+def player_picker(label: str, key: str, required: bool = True) -> str:
+    """Searchable dropdown from registry with manual-entry fallback."""
+    choice = st.selectbox(
+        label + (" *" if required else " (doubles/XD only)"),
+        options=[None] + player_options,
+        index=0,
+        format_func=lambda x: "" if x is None else x,
+        placeholder="Search by name...",
+        key=f"pick_{key}",
+    )
+    if choice == MANUAL_ENTRY:
+        manual = st.text_input(
+            f"Enter {label.lower()} name manually",
+            key=f"manual_{key}",
+            placeholder="First Last",
+        )
+        return manual.strip()
+    return choice or ""
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 def login(email: str, password: str):
@@ -103,8 +136,8 @@ if not st.session_state.coach_user:
     st.stop()
 
 # ── First-time name setup ─────────────────────────────────────────────────────
-user        = st.session_state.coach_user
-coach_name  = get_coach_name(user.id)
+user       = st.session_state.coach_user
+coach_name = get_coach_name(user.id)
 
 if not coach_name:
     st.title("🏸 Welcome!")
@@ -137,46 +170,51 @@ tab_new, tab_history, tab_athletes, tab_scouting = st.tabs([
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_new:
 
-    # ── Match setup form ──────────────────────────────────────────────────────
+    # ── Match setup (no st.form so dropdowns can react dynamically) ───────────
     if not st.session_state.match_session_id:
         st.subheader("Match Setup")
 
-        with st.form("match_setup"):
-            tournament_name = st.selectbox("Tournament", tourn_names, index=None,
-                                           placeholder="Select tournament...")
-            athlete = st.selectbox("Our Athlete", ds_players, index=None,
-                                   placeholder="Select athlete...")
-            event   = st.selectbox("Event", EVENTS, index=None,
-                                   placeholder="Select event...")
-            round_  = st.selectbox("Round", ROUNDS, index=None,
-                                   placeholder="Select round...")
+        tournament_name = st.selectbox("Tournament *", [None] + tourn_names,
+                                       format_func=lambda x: "" if x is None else x,
+                                       placeholder="Select tournament...")
+        athlete = st.selectbox("Our Athlete *", [None] + ds_players,
+                               format_func=lambda x: "" if x is None else x,
+                               placeholder="Select athlete...")
+        event   = st.selectbox("Event *", [None] + EVENTS,
+                               format_func=lambda x: "" if x is None else x,
+                               placeholder="Select event...")
+        round_  = st.selectbox("Round *", [None] + ROUNDS,
+                               format_func=lambda x: "" if x is None else x,
+                               placeholder="Select round...")
 
-            # Doubles fields shown for all — coach checks if applicable
-            st.markdown("**Doubles / XD only**")
-            partner   = st.text_input("Partner name (leave blank for singles)")
-            opponent1 = st.text_input("Opponent 1 name *")
-            opponent2 = st.text_input("Opponent 2 name (doubles/XD only)")
+        st.markdown("---")
+        st.markdown("**Partner & Opponents**")
 
-            if st.form_submit_button("▶ Start Match", use_container_width=True, type="primary"):
-                if tournament_name and athlete and event and round_ and opponent1:
-                    tid  = tourn_options.get(tournament_name, "")
-                    resp = supabase.table("match_sessions").insert({
-                        "coach_id":        user.id,
-                        "tournament_id":   tid,
-                        "tournament_name": tournament_name,
-                        "athlete_name":    athlete,
-                        "event":           event,
-                        "round":           round_,
-                        "partner_name":    partner  or None,
-                        "opponent1_name":  opponent1,
-                        "opponent2_name":  opponent2 or None,
-                    }).execute()
-                    if resp.data:
-                        st.session_state.match_session_id = resp.data[0]["id"]
-                        st.session_state.match_stage      = "pre_game"
-                        st.rerun()
-                else:
-                    st.warning("Please fill in Tournament, Athlete, Event, Round and at least one Opponent.")
+        partner   = player_picker("Partner",    "partner",   required=False)
+        opponent1 = player_picker("Opponent 1", "opponent1", required=True)
+        opponent2 = player_picker("Opponent 2", "opponent2", required=False)
+
+        st.markdown("")
+        if st.button("▶ Start Match", use_container_width=True, type="primary"):
+            if tournament_name and athlete and event and round_ and opponent1:
+                tid  = tourn_options.get(tournament_name, "")
+                resp = supabase.table("match_sessions").insert({
+                    "coach_id":        user.id,
+                    "tournament_id":   tid,
+                    "tournament_name": tournament_name,
+                    "athlete_name":    athlete,
+                    "event":           event,
+                    "round":           round_,
+                    "partner_name":    partner   or None,
+                    "opponent1_name":  opponent1,
+                    "opponent2_name":  opponent2 or None,
+                }).execute()
+                if resp.data:
+                    st.session_state.match_session_id = resp.data[0]["id"]
+                    st.session_state.match_stage      = "pre_game"
+                    st.rerun()
+            else:
+                st.warning("Please fill in Tournament, Athlete, Event, Round and at least Opponent 1.")
 
     # ── Active match ──────────────────────────────────────────────────────────
     else:
@@ -190,7 +228,6 @@ with tab_new:
 
         sess = sess_resp.data[0]
 
-        # Match header
         opp_str     = sess["opponent1_name"]
         if sess.get("opponent2_name"):
             opp_str += f" / {sess['opponent2_name']}"
@@ -200,7 +237,6 @@ with tab_new:
         st.caption(f"{sess['tournament_name']} · {sess['event']} · {sess['round']}")
         st.divider()
 
-        # Stage navigation buttons
         stages = {
             "pre_game":      "📋 Pre-Game",
             "between_games": "⏱ Between Games",
@@ -215,87 +251,54 @@ with tab_new:
 
         st.divider()
 
-        # ── Note helpers ──────────────────────────────────────────────────────
         def save_notes(stage_key: str, text: str):
             existing = supabase.table("match_notes") \
-                .select("id") \
-                .eq("session_id", sess_id) \
-                .eq("stage", stage_key) \
-                .execute()
+                .select("id").eq("session_id", sess_id).eq("stage", stage_key).execute()
             if existing.data:
                 supabase.table("match_notes") \
                     .update({"notes": text, "updated_at": "now()"}) \
-                    .eq("id", existing.data[0]["id"]) \
-                    .execute()
+                    .eq("id", existing.data[0]["id"]).execute()
             else:
                 supabase.table("match_notes") \
-                    .insert({"session_id": sess_id, "stage": stage_key, "notes": text}) \
-                    .execute()
+                    .insert({"session_id": sess_id, "stage": stage_key, "notes": text}).execute()
 
         def get_notes(stage_key: str) -> str:
-            r = supabase.table("match_notes") \
-                .select("notes") \
-                .eq("session_id", sess_id) \
-                .eq("stage", stage_key) \
-                .execute()
+            r = supabase.table("match_notes").select("notes") \
+                .eq("session_id", sess_id).eq("stage", stage_key).execute()
             return r.data[0]["notes"] if r.data and r.data[0]["notes"] else ""
 
-        # ── PRE-GAME ──────────────────────────────────────────────────────────
         if st.session_state.match_stage == "pre_game":
             st.subheader("📋 Pre-Game Plan")
-
-            # Auto-pull opponent scouting notes
-            opp1_notes = supabase.table("athlete_notes") \
-                .select("notes") \
-                .eq("player_name", sess["opponent1_name"]) \
-                .eq("is_opponent", True) \
-                .execute()
-            if opp1_notes.data and opp1_notes.data[0]["notes"]:
-                with st.expander(f"📁 Scouting notes: {sess['opponent1_name']}", expanded=True):
-                    st.markdown(opp1_notes.data[0]["notes"])
-
-            if sess.get("opponent2_name"):
-                opp2_notes = supabase.table("athlete_notes") \
-                    .select("notes") \
-                    .eq("player_name", sess["opponent2_name"]) \
-                    .eq("is_opponent", True) \
-                    .execute()
-                if opp2_notes.data and opp2_notes.data[0]["notes"]:
-                    with st.expander(f"📁 Scouting notes: {sess['opponent2_name']}", expanded=True):
-                        st.markdown(opp2_notes.data[0]["notes"])
-
+            for opp_key in ["opponent1_name", "opponent2_name"]:
+                opp_name = sess.get(opp_key)
+                if opp_name:
+                    opp_notes = supabase.table("athlete_notes").select("notes") \
+                        .eq("player_name", opp_name).eq("is_opponent", True).execute()
+                    if opp_notes.data and opp_notes.data[0]["notes"]:
+                        with st.expander(f"📁 Scouting notes: {opp_name}", expanded=True):
+                            st.markdown(opp_notes.data[0]["notes"])
             existing = get_notes("pre_game")
-            notes = st.text_area(
-                "Pre-game tips & game plan",
-                value=existing, height=220,
-                placeholder="Key tactics, opponent weaknesses to target, game plan..."
-            )
+            notes = st.text_area("Pre-game tips & game plan", value=existing, height=220,
+                                 placeholder="Key tactics, opponent weaknesses, game plan...")
             if st.button("💾 Save Pre-Game Notes", use_container_width=True, type="primary"):
                 save_notes("pre_game", notes)
                 st.success("Saved!")
 
-        # ── BETWEEN GAMES ─────────────────────────────────────────────────────
         elif st.session_state.match_stage == "between_games":
             st.subheader("⏱ Between Games")
             existing = get_notes("between_games")
-            notes = st.text_area(
-                "Coaching notes (between game 2 & 3)",
-                value=existing, height=220,
-                placeholder="What's working, adjustments needed, key message for the athlete..."
-            )
+            notes = st.text_area("Coaching notes (between game 2 & 3)", value=existing,
+                                 height=220,
+                                 placeholder="What's working, adjustments needed, key message...")
             if st.button("💾 Save Notes", use_container_width=True, type="primary"):
                 save_notes("between_games", notes)
                 st.success("Saved!")
 
-        # ── POST-MATCH ────────────────────────────────────────────────────────
         elif st.session_state.match_stage == "post_match":
             st.subheader("✅ Post-Match Debrief")
             existing = get_notes("post_match")
-            notes = st.text_area(
-                "Post-match debrief",
-                value=existing, height=220,
-                placeholder="What went well, what to improve, key learnings for next time..."
-            )
+            notes = st.text_area("Post-match debrief", value=existing, height=220,
+                                 placeholder="What went well, what to improve, key learnings...")
             if st.button("💾 Save Post-Match Notes", use_container_width=True, type="primary"):
                 save_notes("post_match", notes)
                 st.success("Saved!")
@@ -312,10 +315,8 @@ with tab_new:
 with tab_history:
     st.subheader("Past Match Sessions")
 
-    resp = supabase.table("match_sessions") \
-        .select("*") \
-        .order("created_at", desc=True) \
-        .execute()
+    resp = supabase.table("match_sessions").select("*") \
+        .order("created_at", desc=True).execute()
 
     if resp.data:
         for sess in resp.data:
@@ -328,10 +329,8 @@ with tab_history:
             label = f"{date_str} · {sess['athlete_name']}{partner_str} vs {opp} · {sess['event']} {sess['round']}"
             with st.expander(label):
                 st.caption(sess["tournament_name"])
-                notes_resp = supabase.table("match_notes") \
-                    .select("stage,notes") \
-                    .eq("session_id", sess["id"]) \
-                    .execute()
+                notes_resp = supabase.table("match_notes").select("stage,notes") \
+                    .eq("session_id", sess["id"]).execute()
                 stage_labels = {
                     "pre_game":      "📋 Pre-Game",
                     "between_games": "⏱ Between Games",
@@ -355,29 +354,24 @@ with tab_athletes:
     st.caption("Persistent development notes on Drive Sports athletes — visible to all coaches")
 
     sel_athlete = st.selectbox(
-        "Select athlete", ds_players, index=None,
+        "Select athlete", [None] + ds_players,
+        format_func=lambda x: "" if x is None else x,
         placeholder="Choose athlete...", key="athlete_notes_select"
     )
 
     if sel_athlete:
-        notes_resp = supabase.table("athlete_notes") \
-            .select("*") \
-            .eq("player_name", sel_athlete) \
-            .eq("is_opponent", False) \
-            .execute()
+        notes_resp = supabase.table("athlete_notes").select("*") \
+            .eq("player_name", sel_athlete).eq("is_opponent", False).execute()
         existing      = notes_resp.data[0] if notes_resp.data else None
         existing_text = existing["notes"]  if existing         else ""
 
-        ath_notes = st.text_area(
-            "Notes", value=existing_text, height=250,
-            placeholder="Strengths, areas to develop, coaching history, match tendencies..."
-        )
+        ath_notes = st.text_area("Notes", value=existing_text, height=250,
+                                 placeholder="Strengths, areas to develop, coaching history, match tendencies...")
         if st.button("💾 Save Athlete Notes", use_container_width=True, type="primary"):
             if existing:
                 supabase.table("athlete_notes") \
                     .update({"notes": ath_notes, "updated_at": "now()"}) \
-                    .eq("id", existing["id"]) \
-                    .execute()
+                    .eq("id", existing["id"]).execute()
             else:
                 supabase.table("athlete_notes").insert({
                     "coach_id":    user.id,
@@ -387,12 +381,9 @@ with tab_athletes:
                 }).execute()
             st.success("Saved!")
 
-        # Recent match sessions for this athlete
         sessions_resp = supabase.table("match_sessions") \
             .select("tournament_name,event,round,opponent1_name,opponent2_name,created_at") \
-            .eq("athlete_name", sel_athlete) \
-            .order("created_at", desc=True) \
-            .execute()
+            .eq("athlete_name", sel_athlete).order("created_at", desc=True).execute()
         if sessions_resp.data:
             st.divider()
             st.markdown(f"**Recent match sessions ({len(sessions_resp.data)} total)**")
@@ -409,12 +400,11 @@ with tab_scouting:
     st.subheader("Opponent Scouting Notes")
     st.caption("Notes are shared across all coaches")
 
+    # ── Search existing scouting notes ────────────────────────────────────────
     opp_search = st.text_input("🔍 Search opponent", placeholder="Type opponent name...")
     if opp_search and len(opp_search) >= 2:
-        all_opp = supabase.table("athlete_notes") \
-            .select("player_name,notes,updated_at") \
-            .eq("is_opponent", True) \
-            .execute()
+        all_opp = supabase.table("athlete_notes").select("player_name,notes,updated_at") \
+            .eq("is_opponent", True).execute()
         matches = [n for n in (all_opp.data or []) if opp_search.lower() in n["player_name"].lower()]
         if matches:
             for n in matches:
@@ -424,15 +414,27 @@ with tab_scouting:
             st.info(f"No scouting notes found for '{opp_search}'.")
 
     st.divider()
+
+    # ── Add / update scouting notes ───────────────────────────────────────────
     st.subheader("Add / Update Scouting Notes")
 
-    opp_name = st.text_input("Opponent name", placeholder="Enter full name...")
+    opp_choice = st.selectbox(
+        "Select opponent",
+        options=[None] + player_options,
+        format_func=lambda x: "" if x is None else x,
+        placeholder="Search by name...",
+        key="scouting_opp_select",
+    )
+    if opp_choice == MANUAL_ENTRY:
+        opp_name = st.text_input("Enter opponent name manually",
+                                 placeholder="First Last", key="scouting_manual")
+        opp_name = opp_name.strip()
+    else:
+        opp_name = opp_choice or ""
+
     if opp_name:
-        existing_resp = supabase.table("athlete_notes") \
-            .select("*") \
-            .eq("player_name", opp_name) \
-            .eq("is_opponent", True) \
-            .execute()
+        existing_resp = supabase.table("athlete_notes").select("*") \
+            .eq("player_name", opp_name).eq("is_opponent", True).execute()
         existing      = existing_resp.data[0] if existing_resp.data else None
         existing_text = existing["notes"]      if existing         else ""
 
@@ -444,8 +446,7 @@ with tab_scouting:
             if existing:
                 supabase.table("athlete_notes") \
                     .update({"notes": opp_notes, "updated_at": "now()"}) \
-                    .eq("id", existing["id"]) \
-                    .execute()
+                    .eq("id", existing["id"]).execute()
             else:
                 supabase.table("athlete_notes").insert({
                     "coach_id":    user.id,
