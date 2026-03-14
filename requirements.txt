@@ -3,3 +3,4 @@ beautifulsoup4
 pandas
 streamlit>=1.40.0
 plotly
+supabase>=2.0.0
