@@ -1049,17 +1049,32 @@ with tab_h2h:
 with tab_matches:
     st.subheader("All Match Results")
 
-    col1, col2, col3 = st.columns(3)
+    # Build tournament name lookup and attach to matches
+    _mr_tourn_info = load_tournaments()
+    _mr_id_to_name = {
+        tid: (info.get("name", tid) if isinstance(info, dict) else tid)
+        for tid, info in _mr_tourn_info.items()
+    }
+    all_matches["tournament_name"] = all_matches["tournament_id"].map(
+        lambda tid: _mr_id_to_name.get(tid, _mr_id_to_name.get(tid.upper(), tid))
+    )
+    tourn_names_sorted = sorted(all_matches["tournament_name"].dropna().unique())
+
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
+        tourn_filter = st.multiselect("Filter by Tournament", tourn_names_sorted)
+    with col2:
         event_filter = st.multiselect("Filter by Event",
                                       sorted(all_matches["event"].dropna().unique()))
-    with col2:
+    with col3:
         round_filter = st.multiselect("Filter by Round",
                                       sorted(all_matches["round"].dropna().unique()))
-    with col3:
+    with col4:
         player_filter = st.text_input("Search player name")
 
     filtered = all_matches.copy()
+    if tourn_filter:
+        filtered = filtered[filtered["tournament_name"].isin(tourn_filter)]
     if event_filter:
         filtered = filtered[filtered["event"].isin(event_filter)]
     if round_filter:
@@ -1073,9 +1088,10 @@ with tab_matches:
 
     st.caption(f"Showing {len(filtered)} matches")
     st.dataframe(
-        filtered[["date", "event", "round", "player1", "player2", "winner", "score"]].rename(
+        filtered[["tournament_name", "date", "event", "round", "player1", "player2", "winner", "score"]].rename(
             columns={
-                "date": "Date", "event": "Event", "round": "Round",
+                "tournament_name": "Tournament", "date": "Date",
+                "event": "Event", "round": "Round",
                 "player1": "Player 1", "player2": "Player 2",
                 "winner": "Winner", "score": "Score"
             }
