@@ -9,7 +9,11 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-from scraper import scrape_tournament, extract_tournament_id, scrape_player_registry
+try:
+    from scraper import scrape_tournament, extract_tournament_id, scrape_player_registry
+    SCRAPING_AVAILABLE = True
+except Exception:
+    SCRAPING_AVAILABLE = False
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -287,57 +291,59 @@ st.caption("Track junior athlete performance across Badminton Canada tournaments
 
 # Sidebar — add tournaments
 with st.sidebar:
-    st.header("Add Tournament")
-    url_input = st.text_input(
-        "Tournament URL",
-        placeholder="https://badmintoncanada.tournamentsoftware.com/tournament/...",
-    )
-    force_rescrape = st.checkbox("Re-scrape if already loaded", value=False)
+    if SCRAPING_AVAILABLE:
+        st.header("Add Tournament")
+        url_input = st.text_input(
+            "Tournament URL",
+            placeholder="https://badmintoncanada.tournamentsoftware.com/tournament/...",
+        )
+        force_rescrape = st.checkbox("Re-scrape if already loaded", value=False)
 
-    if st.button("Scrape Tournament", type="primary"):
-        if url_input.strip():
-            try:
-                tid = extract_tournament_id(url_input.strip())
-            except ValueError:
-                st.error("Could not find a tournament ID in that URL. Please check and try again.")
-                tid = None
+        if st.button("Scrape Tournament", type="primary"):
+            if url_input.strip():
+                try:
+                    tid = extract_tournament_id(url_input.strip())
+                except ValueError:
+                    st.error("Could not find a tournament ID in that URL. Please check and try again.")
+                    tid = None
 
-            if tid:
-                already_loaded = tid.upper() in {k.upper() for k in load_tournaments().keys()}
-                if already_loaded and not force_rescrape:
-                    st.warning("This tournament is already loaded. Check 'Re-scrape if already loaded' if you want to refresh it.")
-                else:
-                    with st.spinner("Scraping tournament data..."):
-                        try:
-                            result = scrape_tournament(url_input.strip())
-                            save_tournament_info(result["info"])
-                            save_data(result["players"], result["matches"], result["info"]["id"])
-                            st.success(f"Loaded: {result['info']['name']} — {len(result['players'])} players, {len(result['matches'])} matches")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error: {e}")
+                if tid:
+                    already_loaded = tid.upper() in {k.upper() for k in load_tournaments().keys()}
+                    if already_loaded and not force_rescrape:
+                        st.warning("This tournament is already loaded. Check 'Re-scrape if already loaded' if you want to refresh it.")
+                    else:
+                        with st.spinner("Scraping tournament data..."):
+                            try:
+                                result = scrape_tournament(url_input.strip())
+                                save_tournament_info(result["info"])
+                                save_data(result["players"], result["matches"], result["info"]["id"])
+                                st.success(f"Loaded: {result['info']['name']} — {len(result['players'])} players, {len(result['matches'])} matches")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+            else:
+                st.warning("Please enter a tournament URL.")
+
+        st.divider()
+        st.header("Player Registry")
+        registry_exists = os.path.exists(REGISTRY_FILE)
+        if registry_exists:
+            reg = pd.read_csv(REGISTRY_FILE)
+            st.caption(f"{len(reg)} ranked players with birth years")
         else:
-            st.warning("Please enter a tournament URL.")
+            st.caption("Not yet loaded")
+        if st.button("Refresh Player Registry"):
+            with st.spinner("Fetching Alberta Junior rankings..."):
+                try:
+                    reg_df = scrape_player_registry()
+                    reg_df.to_csv(REGISTRY_FILE, index=False)
+                    st.success(f"Loaded {len(reg_df)} players with birth years")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
-    st.divider()
-    st.header("Player Registry")
-    registry_exists = os.path.exists(REGISTRY_FILE)
-    if registry_exists:
-        reg = pd.read_csv(REGISTRY_FILE)
-        st.caption(f"{len(reg)} ranked players with birth years")
-    else:
-        st.caption("Not yet loaded")
-    if st.button("Refresh Player Registry"):
-        with st.spinner("Fetching Alberta Junior rankings..."):
-            try:
-                reg_df = scrape_player_registry()
-                reg_df.to_csv(REGISTRY_FILE, index=False)
-                st.success(f"Loaded {len(reg_df)} players with birth years")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
+        st.divider()
 
-    st.divider()
     st.header("Loaded Tournaments")
     tournaments = load_tournaments()
     if tournaments:
