@@ -187,28 +187,45 @@ def scrape_matches(tournament_id: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+_REGISTRY_CATEGORIES = {
+    "BS U11": 128,  "BD U11": 129,  "GS U11": 130,  "GD U11": 131,  "XD U11": 147,
+    "BS U13": 132,  "BD U13": 133,  "GS U13": 136,  "GD U13": 137,  "XD U13": 148,
+    "BS U15": 138,  "BD U15": 139,  "GS U15": 140,  "GD U15": 141,  "XD U15": 149,
+    "BS U17": 142,  "BD U17": 143,  "GS U17": 144,  "GD U17": 145,  "XD U17": 150,
+    "BS U19": 2084, "BD U19": 2085, "GS U19": 2086, "GD U19": 2087, "XD U19": 2088,
+}
+
+
 def scrape_player_registry() -> pd.DataFrame:
     """
-    Scrape the Alberta Junior ranking page to get player names, member IDs,
-    and birth years. Returns a deduplicated DataFrame keyed on member_id.
+    Scrape all 25 Alberta Junior ranking categories (U11–U19, all events)
+    to get player names, member IDs, and birth years.
+    Returns a deduplicated DataFrame keyed on member_id.
     """
-    url = "https://badmintoncanada.tournamentsoftware.com/ranking/ranking.aspx?id=50504"
-    resp = requests.get(url, headers=HEADERS, timeout=15)
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "html.parser")
-
+    base = "https://badmintoncanada.tournamentsoftware.com/ranking/category.aspx"
     seen = {}  # member_id -> dict, to deduplicate
-    for row in soup.select("table tr"):
-        cells = [td.get_text(strip=True) for td in row.select("td")]
-        # Data rows: ['rank', '', '', 'Name', '', 'AB#####', 'YYYY', ...]
-        if len(cells) >= 7 and cells[5].startswith("AB") and cells[6].isdigit():
-            member_id = cells[5]
-            if member_id not in seen:
-                seen[member_id] = {
-                    "player_name": cells[3],
-                    "member_id": member_id,
-                    "birth_year": int(cells[6]),
-                }
+
+    for label, cat_id in _REGISTRY_CATEGORIES.items():
+        url = f"{base}?id=50504&category={cat_id}&p=1&ps=100"
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=15)
+            resp.raise_for_status()
+        except Exception as e:
+            print(f"  Warning: could not fetch {label} (cat {cat_id}): {e}")
+            continue
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for row in soup.select("table tr"):
+            cells = [td.get_text(strip=True) for td in row.select("td")]
+            # Layout: ['rank', '', '', 'Name', '', 'AB#####', 'YYYY', ...]
+            if len(cells) >= 7 and cells[5].startswith("AB") and cells[6].isdigit():
+                member_id = cells[5]
+                if member_id not in seen:
+                    seen[member_id] = {
+                        "player_name": normalize_player_name(cells[3]),
+                        "member_id": member_id,
+                        "birth_year": int(cells[6]),
+                    }
 
     return pd.DataFrame(seen.values())
 
