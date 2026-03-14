@@ -34,6 +34,8 @@ TOURNAMENTS = [
     {"name": "ClearOne Calgary Junior",        "tier": "SILVER",   "dates": "Jan 30–Feb 1", "url": "https://badmintoncanada.tournamentsoftware.com/tournament/a7e7242e-7048-4a4f-8cca-56f64f433a83"},
     {"name": "Blackfalds Junior",              "tier": "GOLD",     "dates": "Feb 6–8",      "url": "https://badmintoncanada.tournamentsoftware.com/tournament/2E257919-BB98-4C28-B498-FA740D612360"},
     {"name": "B-Active (Shirley Mah Memorial)","tier": "GOLD",     "dates": "Feb 27–Mar 1", "url": "https://badmintoncanada.tournamentsoftware.com/tournament/0C767982-6953-44DD-819A-AA969512533E"},
+    {"name": "Edison Junior (u17/19)",         "tier": "SILVER",   "dates": "TBD",          "url": "https://badmintoncanada.tournamentsoftware.com/tournament/2d79a93c-233a-45da-b054-d025f2f52e2d"},
+    {"name": "Gao Junior",                     "tier": "GOLD",     "dates": "TBD",          "url": "https://badmintoncanada.tournamentsoftware.com/tournament/be00e6ff-99f2-4024-bdfd-253411fd01b3"},
 ]
 
 

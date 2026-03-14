@@ -94,5 +94,17 @@
     "date": "Wed 7 Jan 8:00 AM (GMT -07:00)",
     "id": "0C767982-6953-44DD-819A-AA969512533E",
     "tier": "GOLD"
+  },
+  "2d79a93c-233a-45da-b054-d025f2f52e2d": {
+    "name": "25.26 YONEX AJC Silver - Edison Junior u17, 19",
+    "date": "Thu 25 Sep 2025 3:00 PM (GMT -06:00)",
+    "id": "2d79a93c-233a-45da-b054-d025f2f52e2d",
+    "tier": "SILVER"
+  },
+  "be00e6ff-99f2-4024-bdfd-253411fd01b3": {
+    "name": "24.25 YONEX AJC GOLD - Gao Badminton Junior u11, 13, 15, 17, 19",
+    "date": "Sat 22 Feb 2025 8:00 AM (GMT -07:00)",
+    "id": "be00e6ff-99f2-4024-bdfd-253411fd01b3",
+    "tier": "GOLD"
   }
 }
