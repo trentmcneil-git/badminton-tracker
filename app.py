@@ -267,6 +267,49 @@ def get_club_discipline_stats(matches: pd.DataFrame, players: pd.DataFrame) -> p
     return pd.DataFrame(rows).sort_values(["Discipline", "Win Rate %"], ascending=[True, False])
 
 
+def get_club_tier_stats(matches: pd.DataFrame, players: pd.DataFrame,
+                        tournaments: dict) -> pd.DataFrame:
+    """Win rate per club broken down by tournament tier (Bronze/Silver/Gold/National)."""
+    if matches.empty or players.empty:
+        return pd.DataFrame()
+
+    # Build uppercase tier lookup keyed on uppercase tournament id
+    tier_map = {
+        tid.upper(): info.get("tier", "UNKNOWN")
+        for tid, info in tournaments.items()
+        if isinstance(info, dict)
+    }
+
+    m = matches.copy()
+    m["tier"] = m["tournament_id"].str.upper().map(tier_map)
+    m = m[m["tier"].isin(TIER_ORDER)]
+
+    rows = []
+    for club in sorted(players["club"].dropna().unique()):
+        club_players = set(players[players["club"] == club]["player_name"].unique())
+        for tier in TIER_ORDER:
+            tm = m[
+                (m["tier"] == tier) &
+                (m["player1"].isin(club_players) | m["player2"].isin(club_players))
+            ]
+            total = len(tm)
+            if total == 0:
+                continue
+            wins = int(tm["winner"].isin(club_players).sum())
+            rows.append({
+                "Club":       club,
+                "Tier":       tier,
+                "Matches":    total,
+                "Wins":       wins,
+                "Losses":     total - wins,
+                "Win Rate %": round(wins / total * 100, 1),
+            })
+
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
+
+
 def get_club_stats(club_name: str, matches: pd.DataFrame, players: pd.DataFrame) -> pd.DataFrame:
     club_players = players[players["club"] == club_name]["player_name"].unique()
     rows = []
@@ -354,6 +397,24 @@ with st.sidebar:
     else:
         st.caption("No tournaments loaded yet.")
 
+# ── Alberta clubs (module-level — used in Overview and Tier Analysis) ─────────
+ALBERTA_CLUBS = {
+    "Modu Club", "Drive Sports Badminton Club", "Gao Badminton Tao",
+    "B-Active Badminton Club", "Calgary Winter Club", "The Glencoe Club",
+    "Edison Badminton Centre", "Derrick Golf & Winter Club",
+    "Red Deer Youth Badminton Club", "ClearOne Calgary", "Royal Glenora Club",
+    "Kshatriya Badminton Academy", "Fort McMurray Junior Badminton Club",
+    "Red Willow Badminton Club", "Grande Prairie Badminton Club",
+    "Lethbridge Badminton Club", "Stettler Junior Badminton Club",
+    "Sunridge Badminton Centre", "Riverbend Badminton Club", "GX Badminton",
+}
+
+TIER_ORDER  = ["BRONZE", "SILVER", "GOLD", "NATIONAL"]
+TIER_LABELS = {"BRONZE": "Bronze", "SILVER": "Silver",
+               "GOLD": "Gold", "NATIONAL": "National / Elite"}
+TIER_COLOURS = {"BRONZE": "#cd7f32", "SILVER": "#a8a9ad",
+                "GOLD": "#ffd700", "NATIONAL": "#3498db"}
+
 # Load data
 all_players = load_players()
 all_matches = load_matches()
@@ -370,8 +431,8 @@ if all_matches.empty:
     st.stop()
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab_overview, tab_player, tab_club, tab_trend, tab_cohort, tab_h2h, tab_matches = st.tabs([
-    "Overview", "Player Analytics", "Club Leaderboard",
+tab_overview, tab_player, tab_club, tab_tier, tab_trend, tab_cohort, tab_h2h, tab_matches = st.tabs([
+    "Overview", "Player Analytics", "Club Leaderboard", "Club by Tier",
     "Season Trend", "Birth Year Cohort", "Head-to-Head", "Match Results"
 ])
 
@@ -415,30 +476,6 @@ with tab_overview:
     st.plotly_chart(fig_pc, use_container_width=True)
 
     st.divider()
-
-    # Alberta clubs — complete list used to filter sections 2 and 3
-    ALBERTA_CLUBS = {
-        "Modu Club",
-        "Drive Sports Badminton Club",
-        "Gao Badminton Tao",
-        "B-Active Badminton Club",
-        "Calgary Winter Club",
-        "The Glencoe Club",
-        "Edison Badminton Centre",
-        "Derrick Golf & Winter Club",
-        "Red Deer Youth Badminton Club",
-        "ClearOne Calgary",
-        "Royal Glenora Club",
-        "Kshatriya Badminton Academy",
-        "Fort McMurray Junior Badminton Club",
-        "Red Willow Badminton Club",
-        "Grande Prairie Badminton Club",
-        "Lethbridge Badminton Club",
-        "Stettler Junior Badminton Club",
-        "Sunridge Badminton Centre",
-        "Riverbend Badminton Club",
-        "GX Badminton",
-    }
 
     # ── Shared filter toggle (applies to sections 2 and 3) ────────────────────
     ab_only = st.toggle("🏔️ Alberta clubs only", value=True, key="ov_ab_toggle")
@@ -750,6 +787,133 @@ with tab_club:
                     height=max(200, len(sub) * 30),
                 )
                 st.plotly_chart(fig_d, use_container_width=True)
+
+
+# ── Club by Tier tab ──────────────────────────────────────────────────────────
+with tab_tier:
+    st.subheader("Club Performance by Tournament Tier")
+    st.caption(
+        "Bronze and Silver are provincial-level; Gold is provincial championship level; "
+        "National/Elite are the highest tier."
+    )
+
+    _tier_tournaments = load_tournaments()
+    tier_raw = get_club_tier_stats(all_matches, all_players, _tier_tournaments)
+
+    if tier_raw.empty:
+        st.info("No tier data available.")
+    else:
+        col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
+        ab_only_tier = col_f1.toggle("🏔️ Alberta clubs only", value=True, key="tier_ab_toggle")
+        min_m_tier   = col_f2.slider("Min matches per tier", 5, 50, 10, key="tier_min_matches")
+        sel_tiers    = col_f3.multiselect(
+            "Tiers", TIER_ORDER,
+            default=TIER_ORDER,
+            format_func=lambda t: TIER_LABELS[t],
+            key="tier_sel_tiers",
+        )
+
+        df_t = tier_raw.copy()
+        if ab_only_tier:
+            df_t = df_t[df_t["Club"].isin(ALBERTA_CLUBS)]
+        df_t = df_t[df_t["Tier"].isin(sel_tiers)]
+        df_t = df_t[df_t["Matches"] >= min_m_tier]
+
+        if df_t.empty:
+            st.info("No clubs meet the current filter criteria.")
+        else:
+            # ── Heatmap: clubs vs tiers, colour = win rate ─────────────────────
+            st.markdown("### Win Rate Heatmap")
+            st.caption("Colour intensity = win rate at that tier. Grey = fewer than minimum matches.")
+
+            pivot = df_t.pivot_table(
+                index="Club", columns="Tier", values="Win Rate %", aggfunc="first"
+            ).reindex(columns=[t for t in TIER_ORDER if t in sel_tiers])
+
+            # Sort clubs by average win rate across tiers (descending)
+            pivot["_avg"] = pivot.mean(axis=1)
+            pivot = pivot.sort_values("_avg", ascending=False).drop(columns="_avg")
+
+            import plotly.graph_objects as go
+
+            heat_text = pivot.applymap(lambda v: f"{v:.1f}%" if pd.notna(v) else "—")
+            fig_heat = go.Figure(go.Heatmap(
+                z=pivot.values,
+                x=[TIER_LABELS[t] for t in pivot.columns],
+                y=pivot.index.tolist(),
+                text=heat_text.values,
+                texttemplate="%{text}",
+                colorscale="RdYlGn",
+                zmin=0, zmax=100,
+                colorbar=dict(title="Win %"),
+            ))
+            fig_heat.update_layout(
+                height=max(350, len(pivot) * 30 + 100),
+                xaxis_title="Tournament Tier",
+                yaxis_title="",
+                margin=dict(l=160, r=20, t=30, b=40),
+            )
+            st.plotly_chart(fig_heat, use_container_width=True)
+
+            # ── Grouped bar chart: one bar per tier, grouped by club ──────────
+            st.markdown("### Win Rate by Tier — Top Clubs")
+            top_clubs = (
+                df_t.groupby("Club")["Win Rate %"].mean()
+                .sort_values(ascending=False)
+                .head(12).index.tolist()
+            )
+            df_bar = df_t[df_t["Club"].isin(top_clubs)]
+
+            fig_bar = go.Figure()
+            for tier in [t for t in TIER_ORDER if t in sel_tiers]:
+                tier_df = df_bar[df_bar["Tier"] == tier]
+                fig_bar.add_bar(
+                    name=TIER_LABELS[tier],
+                    x=tier_df["Club"],
+                    y=tier_df["Win Rate %"],
+                    marker_color=TIER_COLOURS[tier],
+                    text=tier_df["Win Rate %"].apply(lambda v: f"{v:.1f}%"),
+                    textposition="outside",
+                )
+            fig_bar.update_layout(
+                barmode="group",
+                xaxis_title="", yaxis_title="Win Rate %",
+                yaxis_range=[0, 105],
+                height=420,
+                legend_title="Tier",
+                xaxis_tickangle=-30,
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+            # ── Matches played at each tier ───────────────────────────────────
+            st.markdown("### Matches Played at Each Tier")
+            fig_vol = go.Figure()
+            for tier in [t for t in TIER_ORDER if t in sel_tiers]:
+                tier_df = df_bar[df_bar["Tier"] == tier]
+                fig_vol.add_bar(
+                    name=TIER_LABELS[tier],
+                    x=tier_df["Club"],
+                    y=tier_df["Matches"],
+                    marker_color=TIER_COLOURS[tier],
+                )
+            fig_vol.update_layout(
+                barmode="stack",
+                xaxis_title="", yaxis_title="Matches",
+                height=350,
+                legend_title="Tier",
+                xaxis_tickangle=-30,
+            )
+            st.plotly_chart(fig_vol, use_container_width=True)
+
+            # ── Detail table ──────────────────────────────────────────────────
+            with st.expander("Full data table"):
+                display_t = df_t[["Club","Tier","Matches","Wins","Losses","Win Rate %"]].copy()
+                display_t["_tier_order"] = display_t["Tier"].map(
+                    {t: i for i, t in enumerate(TIER_ORDER)}
+                )
+                display_t = display_t.sort_values(["Club", "_tier_order"]).drop(columns="_tier_order")
+                display_t["Tier"] = display_t["Tier"].map(TIER_LABELS)
+                st.dataframe(display_t, use_container_width=True, hide_index=True)
 
 
 # ── Season Trend tab ──────────────────────────────────────────────────────────
