@@ -35,7 +35,7 @@ TOURNAMENTS = [
     {"name": "Blackfalds Junior",              "tier": "GOLD",     "dates": "Feb 6–8",      "url": "https://badmintoncanada.tournamentsoftware.com/tournament/2E257919-BB98-4C28-B498-FA740D612360"},
     {"name": "B-Active (Shirley Mah Memorial)","tier": "GOLD",     "dates": "Feb 27–Mar 1", "url": "https://badmintoncanada.tournamentsoftware.com/tournament/0C767982-6953-44DD-819A-AA969512533E"},
     {"name": "Edison Junior (u17/19)",         "tier": "SILVER",   "dates": "TBD",          "url": "https://badmintoncanada.tournamentsoftware.com/tournament/2d79a93c-233a-45da-b054-d025f2f52e2d"},
-    {"name": "Gao Junior",                     "tier": "GOLD",     "dates": "TBD",          "url": "https://badmintoncanada.tournamentsoftware.com/tournament/be00e6ff-99f2-4024-bdfd-253411fd01b3"},
+    {"name": "Gao Junior",                     "tier": "SILVER",   "dates": "Mar 7-9",      "url": "https://badmintoncanada.tournamentsoftware.com/tournament/1a0c9a2f-3f14-48b7-ba8b-26d4222b523d"},
 ]
 
 
