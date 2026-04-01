@@ -500,18 +500,23 @@ with tab_overview:
     col3.metric("Matches", len(all_matches))
     col4.metric("Clubs", all_players["club"].nunique())
 
-    # ── Build club summary table (used by all three sections below) ────────────
+    # ── Build club summary table using primary_club_index (consistent with Leaderboard) ──
     _ov_rows = []
-    for _club in all_players["club"].dropna().unique():
+    # Group players by their primary club
+    _primary_club_groups: dict[str, list] = {}
+    for _player, _club in primary_club_index.items():
         if _club in NON_CLUBS:
             continue
-        _cp = all_players[all_players["club"] == _club]["player_name"].unique()
-        _cm = all_matches[all_matches["player1"].isin(_cp) | all_matches["player2"].isin(_cp)]
-        _wins = int(_cm["winner"].isin(_cp).sum())
+        _primary_club_groups.setdefault(_club, []).append(_player)
+
+    for _club, _cp in _primary_club_groups.items():
+        _cp_set = set(_cp)
+        _cm = all_matches[all_matches["player1"].isin(_cp_set) | all_matches["player2"].isin(_cp_set)]
+        _wins = int(_cm["winner"].isin(_cp_set).sum())
         _total = len(_cm)
         _ov_rows.append({
             "Club": _club,
-            "Players": int(len(_cp)),
+            "Players": len(_cp),
             "Matches": _total,
             "Wins": _wins,
             "Win Rate %": round(_wins / _total * 100, 1) if _total else 0,
@@ -585,11 +590,11 @@ with tab_overview:
         "XD": "XD — Mixed Doubles",
     }
 
-    _clubs_to_scan = ALBERTA_CLUBS if ab_only else set(all_players["club"].dropna().unique())
+    _clubs_to_scan = ALBERTA_CLUBS if ab_only else set(_primary_club_groups.keys())
 
     ev_rows = []
     for _club in _clubs_to_scan:
-        _cp = set(all_players[all_players["club"] == _club]["player_name"].unique())
+        _cp = set(_primary_club_groups.get(_club, []))
         if not _cp:
             continue
         for _prefix, _label in _EVENT_PREFIXES.items():
