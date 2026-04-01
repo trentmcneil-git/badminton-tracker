@@ -411,8 +411,8 @@ ALBERTA_CLUBS = {
 
 TIER_ORDER  = ["BRONZE", "SILVER", "GOLD", "NATIONAL", "SUPER"]
 TIER_LABELS = {"BRONZE": "Bronze", "SILVER": "Silver",
-               "GOLD": "Gold", "NATIONAL": "National / Elite",
-               "SUPER": "Super Series"}
+               "GOLD": "Gold", "NATIONAL": "Elite",
+               "SUPER": "Super Elite"}
 TIER_COLOURS = {"BRONZE": "#cd7f32", "SILVER": "#a8a9ad",
                 "GOLD": "#ffd700", "NATIONAL": "#3498db",
                 "SUPER": "#9b59b6"}
