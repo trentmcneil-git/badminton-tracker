@@ -172,7 +172,22 @@ def save_data(players: pd.DataFrame, matches: pd.DataFrame, tournament_id: str):
 
 
 # ── Analytics helpers ─────────────────────────────────────────────────────────
-def get_player_stats(player_name: str, matches: pd.DataFrame, players: pd.DataFrame) -> dict:
+@st.cache_data
+def build_primary_club_index(players: pd.DataFrame) -> dict:
+    """For each player, determine their primary club — most common non-NON_CLUBS entry."""
+    index = {}
+    for name, group in players.groupby("player_name"):
+        real = group[~group["club"].isin(NON_CLUBS)]["club"].dropna()
+        if not real.empty:
+            index[name] = real.mode().iloc[0]
+        else:
+            fallback = group["club"].dropna()
+            index[name] = fallback.iloc[0] if not fallback.empty else "Unknown"
+    return index
+
+
+def get_player_stats(player_name: str, matches: pd.DataFrame, players: pd.DataFrame,
+                     primary_club_index: dict | None = None) -> dict:
     """Compute win/loss and other stats for a single player."""
     involved = matches[
         (matches["player1"] == player_name) | (matches["player2"] == player_name)
@@ -186,9 +201,15 @@ def get_player_stats(player_name: str, matches: pd.DataFrame, players: pd.DataFr
     losses = len(involved) - wins
     win_rate = round(wins / len(involved) * 100, 1) if len(involved) > 0 else 0
 
-    # Club
-    club_row = players[players["player_name"] == player_name]
-    club = club_row["club"].iloc[0] if not club_row.empty else "Unknown"
+    # Club — use primary club index if available, otherwise fall back to first entry
+    if primary_club_index is not None:
+        club = primary_club_index.get(player_name, "Unknown")
+    else:
+        club_row = players[players["player_name"] == player_name]
+        real = club_row[~club_row["club"].isin(NON_CLUBS)]["club"].dropna()
+        club = real.mode().iloc[0] if not real.empty else (
+            club_row["club"].iloc[0] if not club_row.empty else "Unknown"
+        )
 
     # Events played
     events = involved["event"].unique().tolist()
@@ -314,22 +335,33 @@ def get_club_tier_stats(matches: pd.DataFrame, players: pd.DataFrame,
     return pd.DataFrame(rows)
 
 
-def get_club_stats(club_name: str, matches: pd.DataFrame, players: pd.DataFrame) -> pd.DataFrame:
-    club_players = players[players["club"] == club_name]["player_name"].unique()
+def get_club_roster(club_name: str, matches: pd.DataFrame, players: pd.DataFrame,
+                    primary_club_index: dict, gender_index: dict,
+                    birth_year_index: dict) -> pd.DataFrame:
+    """Return full roster stats for all players whose primary club is club_name."""
+    club_players = [p for p, c in primary_club_index.items() if c == club_name]
     rows = []
     for p in club_players:
-        stats = get_player_stats(p, matches, players)
-        if stats:
-            rows.append({
-                "Player": p,
-                "Club": club_name,
-                "Matches": stats["total_matches"],
-                "Wins": stats["wins"],
-                "Losses": stats["losses"],
-                "Win Rate %": stats["win_rate"],
-                "Events": ", ".join(stats["events"]),
-            })
-    return pd.DataFrame(rows).sort_values("Win Rate %", ascending=False) if rows else pd.DataFrame()
+        stats = get_player_stats(p, matches, players, primary_club_index)
+        if not stats:
+            continue
+        by_event = stats["by_event"]
+        events_str = ", ".join(sorted(by_event["event"].tolist())) if not by_event.empty else "—"
+        by_info = birth_year_index.get(p, {})
+        birth_year = by_info.get("birth_year") if isinstance(by_info, dict) else by_info
+        rows.append({
+            "Player":     p,
+            "Gender":     gender_index.get(p, "—"),
+            "Birth Year": int(birth_year) if birth_year else "—",
+            "Events":     events_str,
+            "Matches":    stats["total_matches"],
+            "Wins":       stats["wins"],
+            "Losses":     stats["losses"],
+            "Win Rate %": stats["win_rate"],
+        })
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).sort_values("Win Rate %", ascending=False)
 
 
 # ── UI ────────────────────────────────────────────────────────────────────────
@@ -443,9 +475,11 @@ registry = load_registry()
 if not registry.empty:
     registry["_norm"] = registry["player_name"].apply(normalize_name_for_lookup)
 # Birth year index covers all match players (exact from registry + inferred from age category)
-birth_year_index = build_birth_year_index(all_matches, registry)
+birth_year_index   = build_birth_year_index(all_matches, registry)
 # Gender index inferred from event prefixes (BS/BD=Male, GS/GD=Female)
-gender_index = build_gender_index(all_matches)
+gender_index       = build_gender_index(all_matches)
+# Primary club: each player's most common real club (ignoring NON_CLUBS entries)
+primary_club_index = build_primary_club_index(all_players)
 
 if all_matches.empty:
     st.info("No data yet — add a tournament URL in the sidebar to get started.")
@@ -611,7 +645,7 @@ with tab_player:
                                    placeholder="Start typing a name...")
 
     if selected_player:
-        stats = get_player_stats(selected_player, all_matches, all_players)
+        stats = get_player_stats(selected_player, all_matches, all_players, primary_club_index)
         if not stats:
             st.warning("No match data found for this player.")
         else:
@@ -733,47 +767,63 @@ with tab_player:
 
 # ── Club Leaderboard tab ──────────────────────────────────────────────────────
 with tab_club:
-    clubs = sorted(c for c in all_players["club"].dropna().unique() if c not in NON_CLUBS)
-    selected_club = st.selectbox("Select a club", clubs, index=None,
+    # Build club list from primary club index (accurate, ignores NON_CLUBS)
+    _primary_clubs = sorted({c for c in primary_club_index.values() if c not in NON_CLUBS})
+    selected_club = st.selectbox("Select a club", _primary_clubs, index=None,
                                  placeholder="Choose a club...")
 
     if selected_club:
-        club_df = get_club_stats(selected_club, all_matches, all_players)
-        if club_df.empty:
-            st.info("No match data for players from this club.")
+        roster = get_club_roster(
+            selected_club, all_matches, all_players,
+            primary_club_index, gender_index, birth_year_index
+        )
+        if roster.empty:
+            st.info("No match data found for players from this club.")
         else:
-            st.subheader(f"{selected_club} — Player Leaderboard")
-            st.dataframe(club_df, use_container_width=True, hide_index=True)
+            st.subheader(f"{selected_club}")
 
-            fig = px.bar(
-                club_df.sort_values("Win Rate %", ascending=True),
-                x="Win Rate %", y="Player", orientation="h",
-                color="Win Rate %", color_continuous_scale="RdYlGn",
-                range_color=[0, 100],
-            )
-            fig.update_layout(coloraxis_showscale=False)
-            st.plotly_chart(fig, use_container_width=True)
+            # Summary metrics
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Athletes", len(roster))
+            c2.metric("Total Matches", int(roster["Matches"].sum()))
+            c3.metric("Total Wins", int(roster["Wins"].sum()))
+            total_m = roster["Matches"].sum()
+            total_w = roster["Wins"].sum()
+            c4.metric("Club Win Rate", f"{round(total_w/total_m*100,1)}%" if total_m else "—")
 
-    st.subheader("All Clubs Summary")
-    all_club_rows = []
-    for club in all_players["club"].dropna().unique():
-        cp = all_players[all_players["club"] == club]["player_name"].unique()
-        club_matches = all_matches[
-            all_matches["player1"].isin(cp) | all_matches["player2"].isin(cp)
-        ]
-        wins = (club_matches["winner"].isin(cp)).sum()
-        total = len(club_matches)
-        all_club_rows.append({
-            "Club": club,
-            "Players": len(cp),
-            "Total Matches": total,
-            "Wins": int(wins),
-            "Win Rate %": round(wins / total * 100, 1) if total > 0 else 0,
-        })
-    all_clubs_df = pd.DataFrame(all_club_rows)
-    if not all_clubs_df.empty:
-        all_clubs_df = all_clubs_df.sort_values("Players", ascending=False)
-    st.dataframe(all_clubs_df, use_container_width=True, hide_index=True)
+            st.divider()
+
+            # Gender filter
+            genders = sorted(roster["Gender"].unique())
+            if len(genders) > 1:
+                sel_gender = st.radio("Filter by gender", ["All"] + genders, horizontal=True)
+                if sel_gender != "All":
+                    roster = roster[roster["Gender"] == sel_gender]
+
+            # Roster table + chart
+            col_tbl, col_chart = st.columns([2, 1])
+            with col_tbl:
+                st.dataframe(
+                    roster[["Player","Gender","Birth Year","Events",
+                             "Matches","Wins","Losses","Win Rate %"]],
+                    use_container_width=True, hide_index=True
+                )
+            with col_chart:
+                fig_roster = px.bar(
+                    roster.sort_values("Win Rate %", ascending=True),
+                    x="Win Rate %", y="Player", orientation="h",
+                    color="Win Rate %", color_continuous_scale="RdYlGn",
+                    range_color=[30, 70],
+                    hover_data=["Matches", "Wins", "Losses"],
+                )
+                fig_roster.update_layout(
+                    coloraxis_showscale=False,
+                    margin=dict(l=0, r=0, t=10, b=0),
+                    height=max(300, len(roster) * 28),
+                )
+                st.plotly_chart(fig_roster, use_container_width=True)
+
+    st.divider()
 
     # ── Win Rate by Discipline ─────────────────────────────────────────────────
     st.subheader("Top Clubs by Win Rate — by Discipline")
