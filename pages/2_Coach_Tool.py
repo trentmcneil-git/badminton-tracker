@@ -6,6 +6,67 @@ from pathlib import Path
 
 st.set_page_config(page_title="Coach Tool", page_icon="🏸", layout="centered")
 
+# ── Mobile-first CSS ──────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* Tight padding on small screens */
+@media (max-width: 768px) {
+    .block-container {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+        padding-top: 0.5rem !important;
+    }
+}
+
+/* Large touch-friendly buttons throughout */
+.stButton > button {
+    min-height: 52px !important;
+    font-size: 1.05rem !important;
+    font-weight: 500 !important;
+    border-radius: 8px !important;
+}
+
+/* Stage buttons — make active state obvious */
+.stButton > button[kind="primary"] {
+    border: 3px solid transparent !important;
+}
+
+/* Full-width inputs */
+.stTextInput input,
+.stTextArea textarea,
+.stSelectbox > div {
+    font-size: 1rem !important;
+}
+
+/* Bigger text areas — easier to type notes on phone */
+.stTextArea textarea {
+    min-height: 160px !important;
+    line-height: 1.5 !important;
+}
+
+/* Match header stands out */
+h3 { font-size: 1.1rem !important; line-height: 1.4 !important; }
+
+/* Tab labels compact */
+.stTabs [data-baseweb="tab"] {
+    font-size: 0.78rem !important;
+    padding: 8px 10px !important;
+    white-space: nowrap !important;
+}
+.stTabs [data-baseweb="tab-list"] {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Expanders easier to tap */
+.streamlit-expanderHeader {
+    font-size: 0.95rem !important;
+    padding: 12px 8px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ── Supabase client ───────────────────────────────────────────────────────────
 @st.cache_resource
 def get_supabase() -> Client:

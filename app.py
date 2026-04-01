@@ -368,6 +368,70 @@ def get_club_roster(club_name: str, matches: pd.DataFrame, players: pd.DataFrame
 st.title("🏸 Badminton Canada Tournament Tracker")
 st.caption("Track junior athlete performance across Badminton Canada tournaments")
 
+# ── Mobile-responsive CSS ─────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* ── Stack columns vertically on phones ── */
+@media (max-width: 768px) {
+    [data-testid="column"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+    }
+
+    /* Shrink metric cards so 3 can fit in a row */
+    [data-testid="metric-container"] {
+        padding: 8px 4px !important;
+    }
+    [data-testid="metric-container"] label {
+        font-size: 0.7rem !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 1.1rem !important;
+    }
+
+    /* Make tab labels smaller and scrollable */
+    .stTabs [data-baseweb="tab-list"] {
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .stTabs [data-baseweb="tab"] {
+        white-space: nowrap !important;
+        font-size: 0.72rem !important;
+        padding: 6px 8px !important;
+    }
+
+    /* Bigger touch targets for buttons */
+    .stButton > button {
+        min-height: 48px !important;
+        font-size: 1rem !important;
+        width: 100% !important;
+    }
+
+    /* Full-width selectboxes and inputs */
+    .stSelectbox, .stTextInput, .stTextArea {
+        width: 100% !important;
+    }
+
+    /* Scrollable dataframes instead of squished */
+    [data-testid="stDataFrame"] {
+        overflow-x: auto !important;
+    }
+
+    /* Reduce page padding on mobile */
+    .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        padding-top: 1rem !important;
+    }
+
+    /* Hide sidebar toggle label on small screens */
+    .st-emotion-cache-1cypcdb { font-size: 0.8rem !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Sidebar — add tournaments
 with st.sidebar:
     if SCRAPING_AVAILABLE:
@@ -494,9 +558,10 @@ tab_overview, tab_player, tab_club, tab_tier, tab_trend, tab_cohort, tab_h2h, ta
 
 # ── Overview tab ─────────────────────────────────────────────────────────────
 with tab_overview:
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2 = st.columns(2)
     col1.metric("Tournaments", len(load_tournaments()))
     col2.metric("Players", all_players["player_name"].nunique())
+    col3, col4 = st.columns(2)
     col3.metric("Matches", len(all_matches))
     col4.metric("Clubs", all_players["club"].nunique())
 
@@ -657,11 +722,12 @@ with tab_player:
             birth_year = get_birth_year(selected_player, registry)
             gender = gender_index.get(selected_player, "—")
 
-            # ── Player summary cards ───────────────────────────────────────────
-            col1, col2, col3, col4, col5, col6 = st.columns(6)
+            # ── Player summary cards (2 rows of 3 — works on mobile) ──────────
+            col1, col2, col3 = st.columns(3)
             col1.metric("Club", stats["club"])
             col2.metric("Gender", gender)
             col3.metric("Birth Year", birth_year if birth_year else "—")
+            col4, col5, col6 = st.columns(3)
             col4.metric("Total Matches", stats["total_matches"])
             col5.metric("Wins / Losses", f"{stats['wins']} / {stats['losses']}")
             col6.metric("Win Rate", f"{stats['win_rate']}%")
