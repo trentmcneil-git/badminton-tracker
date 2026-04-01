@@ -243,6 +243,8 @@ def get_club_discipline_stats(matches: pd.DataFrame, players: pd.DataFrame) -> p
 
     rows = []
     for club in sorted(players["club"].dropna().unique()):
+        if club in NON_CLUBS:
+            continue
         club_players = players[players["club"] == club]["player_name"].unique()
         for disc in ["Singles", "Doubles", "Mixed Doubles"]:
             disc_matches = m[
@@ -286,6 +288,8 @@ def get_club_tier_stats(matches: pd.DataFrame, players: pd.DataFrame,
 
     rows = []
     for club in sorted(players["club"].dropna().unique()):
+        if club in NON_CLUBS:
+            continue
         club_players = set(players[players["club"] == club]["player_name"].unique())
         for tier in TIER_ORDER:
             tm = m[
@@ -409,6 +413,21 @@ ALBERTA_CLUBS = {
     "Sunridge Badminton Centre", "Riverbend Badminton Club", "GX Badminton",
 }
 
+# Placeholder "clubs" that represent unaffiliated/national-team players
+# — exclude from all club performance metrics
+NON_CLUBS = {
+    # Country names used when player has no club
+    "Canada", "China", "England", "Hong Kong", "India", "Korea",
+    "South Korea", "Singapore", "Japan", "USA", "United States",
+    "Australia", "France", "Germany", "Denmark", "Indonesia",
+    "Malaysia", "Thailand", "Taiwan", "Netherlands", "New Zealand",
+    # Zone/region placeholders
+    "BC - Zone 0 - Other", "BC - Zone 3 - Other", "BC - Zone 4 - Other",
+    "BC - Zone 5 - Other", "BC - Zone 5 - Vancouver-Coastal",
+    "ARB - Out of Québec - Extérieur", "ARB - Out of Qu\u00e9bec - Ext\u00e9rieur",
+    "SK - Regina District - Other", "Not Club-Affiliated: Winnipeg",
+}
+
 TIER_ORDER  = ["BRONZE", "SILVER", "GOLD", "NATIONAL", "SUPER"]
 TIER_LABELS = {"BRONZE": "Bronze", "SILVER": "Silver",
                "GOLD": "Gold", "NATIONAL": "Elite",
@@ -450,6 +469,8 @@ with tab_overview:
     # ── Build club summary table (used by all three sections below) ────────────
     _ov_rows = []
     for _club in all_players["club"].dropna().unique():
+        if _club in NON_CLUBS:
+            continue
         _cp = all_players[all_players["club"] == _club]["player_name"].unique()
         _cm = all_matches[all_matches["player1"].isin(_cp) | all_matches["player2"].isin(_cp)]
         _wins = int(_cm["winner"].isin(_cp).sum())
@@ -712,7 +733,7 @@ with tab_player:
 
 # ── Club Leaderboard tab ──────────────────────────────────────────────────────
 with tab_club:
-    clubs = sorted(all_players["club"].dropna().unique().tolist())
+    clubs = sorted(c for c in all_players["club"].dropna().unique() if c not in NON_CLUBS)
     selected_club = st.selectbox("Select a club", clubs, index=None,
                                  placeholder="Choose a club...")
 
