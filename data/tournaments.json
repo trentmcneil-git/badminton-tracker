@@ -121,5 +121,59 @@
     "name": "25.26 YONEX AJC Silver - Sunridge Badminton Centre",
     "date": "Wed 11 Feb 3:00 PM (GMT -07:00)",
     "id": "2cb8c797-6d01-4d7a-9b30-f0fde8b0c645"
+  },
+  "67ED2EDA-0274-413E-8097-A13D07D665D0": {
+    "name": "2025 YONEX Atlantic Junior Elite",
+    "date": "Fri 8 Aug 2025 12:00 PM (GMT -07:00)",
+    "id": "67ED2EDA-0274-413E-8097-A13D07D665D0",
+    "tier": "NATIONAL"
+  },
+  "FA518C82-F936-404D-B431-44955C404EA5": {
+    "name": "2025 YONEX Saskatchewan Junior Elite",
+    "date": "Fri 5 Sep 2025 12:00 PM (GMT -07:00)",
+    "id": "FA518C82-F936-404D-B431-44955C404EA5",
+    "tier": "NATIONAL"
+  },
+  "7EE0174D-4E61-4C27-829C-F4F322E96650": {
+    "name": "2025 YONEX Qu\u00e9bec Junior Super Series",
+    "date": "Fri 19 Sep 2025 12:00 PM (GMT -07:00)",
+    "id": "7EE0174D-4E61-4C27-829C-F4F322E96650",
+    "tier": "SUPER"
+  },
+  "F5A437D5-03D5-4EBC-8671-8D8F1EB7E8B8": {
+    "name": "2025 YONEX Manitoba Junior Elite",
+    "date": "Fri 26 Sep 2025 12:00 PM (GMT -07:00)",
+    "id": "F5A437D5-03D5-4EBC-8671-8D8F1EB7E8B8",
+    "tier": "NATIONAL"
+  },
+  "6454C0EA-8A97-4F69-9A53-FF7EB5328F06": {
+    "name": "2026 YONEX Western Junior Super Series",
+    "date": "Fri 28 Nov 2025 12:00 PM (GMT -08:00)",
+    "id": "6454C0EA-8A97-4F69-9A53-FF7EB5328F06",
+    "tier": "SUPER"
+  },
+  "FC65DE5D-F029-44B5-B115-604CE8A6BF89": {
+    "name": "2026 YONEX Quebec Junior Elite",
+    "date": "Fri 5 Dec 2025 12:00 PM (GMT -08:00)",
+    "id": "FC65DE5D-F029-44B5-B115-604CE8A6BF89",
+    "tier": "NATIONAL"
+  },
+  "88EEC70B-F0E4-4AB2-B8AE-409FB453AE8F": {
+    "name": "2026 YONEX Eastern Junior Super Series",
+    "date": "Fri 19 Dec 2025 12:00 PM (GMT -08:00)",
+    "id": "88EEC70B-F0E4-4AB2-B8AE-409FB453AE8F",
+    "tier": "SUPER"
+  },
+  "0071F938-BED4-4875-89BB-F8BF0D4D9282": {
+    "name": "2026 YONEX BC Junior Elite",
+    "date": "Fri 9 Jan 12:00 PM (GMT -08:00)",
+    "id": "0071F938-BED4-4875-89BB-F8BF0D4D9282",
+    "tier": "NATIONAL"
+  },
+  "B2C80B5F-2B29-4AE5-9872-5063DEE3D6DB": {
+    "name": "2026 YONEX Ontario Junior Elite",
+    "date": "Fri 6 Feb 12:00 PM (GMT -08:00)",
+    "id": "B2C80B5F-2B29-4AE5-9872-5063DEE3D6DB",
+    "tier": "NATIONAL"
   }
 }

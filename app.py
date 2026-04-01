@@ -409,11 +409,13 @@ ALBERTA_CLUBS = {
     "Sunridge Badminton Centre", "Riverbend Badminton Club", "GX Badminton",
 }
 
-TIER_ORDER  = ["BRONZE", "SILVER", "GOLD", "NATIONAL"]
+TIER_ORDER  = ["BRONZE", "SILVER", "GOLD", "NATIONAL", "SUPER"]
 TIER_LABELS = {"BRONZE": "Bronze", "SILVER": "Silver",
-               "GOLD": "Gold", "NATIONAL": "National / Elite"}
+               "GOLD": "Gold", "NATIONAL": "National / Elite",
+               "SUPER": "Super Series"}
 TIER_COLOURS = {"BRONZE": "#cd7f32", "SILVER": "#a8a9ad",
-                "GOLD": "#ffd700", "NATIONAL": "#3498db"}
+                "GOLD": "#ffd700", "NATIONAL": "#3498db",
+                "SUPER": "#9b59b6"}
 
 # Load data
 all_players = load_players()
